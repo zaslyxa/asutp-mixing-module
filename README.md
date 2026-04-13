@@ -12,6 +12,7 @@ The module includes:
 - recipe-driven model selection (dry/wet);
 - recipe save/load in JSON and YAML formats;
 - MaterialConfig layer: component database (SQLite) + recipe scaling to model parameters;
+- HomogenizationViz layer: online RSD/Lacey/H_rel metrics, endpoint prediction, OPC payload and report export;
 - thermal channel dynamics per compartment;
 - CLI runner for tank and cascade modes;
 - Streamlit UI for process visualization;
@@ -42,6 +43,7 @@ python -m streamlit run src/mixing_module/ui.py
 
 In UI sidebar you can load and save recipe files (for example `recipes/my_recipe.yaml`).
 For wet recipes, MaterialConfig computes effective mixture properties and auto-scales model parameters (`tau`, `kh`, `Ka`, `b_q`) from material data.
+HomogenizationViz widgets are available in wet mode: gauges, trends, profile, what-if prediction, OPC payload preview, and report export.
 
 6. Run tests:
 

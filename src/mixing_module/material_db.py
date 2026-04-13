@@ -18,14 +18,16 @@ class MaterialComponent:
     w_crit: float
     cp: float
     angle_repose: float
+    segregation_idx: float
+    w_equilibrium: float
 
 
 DEFAULT_COMPONENTS: tuple[MaterialComponent, ...] = (
-    MaterialComponent("CEM_M500", "Cement M500", "binder", 18.5, 1.8, 1450, 1.22, 0.8, 12.5, 880, 38),
-    MaterialComponent("SAND_Q", "Quartz Sand 0.2-0.5", "filler", 320, 2.2, 1600, 1.12, 0.2, 5.0, 830, 33),
-    MaterialComponent("SALT_TECH", "Technical Salt", "additive", 210, 1.6, 1180, 1.18, 0.1, 3.0, 860, 31),
-    MaterialComponent("WATER", "Water", "binder", 1, 1.0, 1000, 1.0, 100.0, 100.0, 4180, 5),
-    MaterialComponent("PVA_DISP", "PVA Dispersion", "binder", 20, 1.4, 1080, 1.05, 55.0, 65.0, 3000, 10),
+    MaterialComponent("CEM_M500", "Cement M500", "binder", 18.5, 1.8, 1450, 1.22, 0.8, 12.5, 880, 38, 0.35, 0.6),
+    MaterialComponent("SAND_Q", "Quartz Sand 0.2-0.5", "filler", 320, 2.2, 1600, 1.12, 0.2, 5.0, 830, 33, 0.45, 0.2),
+    MaterialComponent("SALT_TECH", "Technical Salt", "additive", 210, 1.6, 1180, 1.18, 0.1, 3.0, 860, 31, 0.25, 0.3),
+    MaterialComponent("WATER", "Water", "binder", 1, 1.0, 1000, 1.0, 100.0, 100.0, 4180, 5, 0.0, 100.0),
+    MaterialComponent("PVA_DISP", "PVA Dispersion", "binder", 20, 1.4, 1080, 1.05, 55.0, 65.0, 3000, 10, 0.15, 45.0),
 )
 
 
@@ -52,10 +54,19 @@ def init_material_db(path: str | Path | None = None) -> Path:
                 w_initial REAL NOT NULL,
                 w_crit REAL NOT NULL,
                 cp REAL NOT NULL,
-                angle_repose REAL NOT NULL
+                angle_repose REAL NOT NULL,
+                segregation_idx REAL NOT NULL DEFAULT 0.3,
+                w_equilibrium REAL NOT NULL DEFAULT 0.0
             )
             """
         )
+        existing_columns = {
+            row[1] for row in con.execute("PRAGMA table_info(components)").fetchall()
+        }
+        if "segregation_idx" not in existing_columns:
+            con.execute("ALTER TABLE components ADD COLUMN segregation_idx REAL NOT NULL DEFAULT 0.3")
+        if "w_equilibrium" not in existing_columns:
+            con.execute("ALTER TABLE components ADD COLUMN w_equilibrium REAL NOT NULL DEFAULT 0.0")
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS audit_log (
@@ -70,8 +81,8 @@ def init_material_db(path: str | Path | None = None) -> Path:
             con.execute(
                 """
                 INSERT OR IGNORE INTO components
-                (code, name, type, d50, span, rho_bulk, hausner_ratio, w_initial, w_crit, cp, angle_repose)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (code, name, type, d50, span, rho_bulk, hausner_ratio, w_initial, w_crit, cp, angle_repose, segregation_idx, w_equilibrium)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     item.code,
@@ -85,6 +96,8 @@ def init_material_db(path: str | Path | None = None) -> Path:
                     item.w_crit,
                     item.cp,
                     item.angle_repose,
+                    item.segregation_idx,
+                    item.w_equilibrium,
                 ),
             )
         con.commit()
@@ -96,7 +109,7 @@ def list_components(path: str | Path | None = None) -> list[MaterialComponent]:
     with sqlite3.connect(db_path) as con:
         rows = con.execute(
             """
-            SELECT code, name, type, d50, span, rho_bulk, hausner_ratio, w_initial, w_crit, cp, angle_repose
+            SELECT code, name, type, d50, span, rho_bulk, hausner_ratio, w_initial, w_crit, cp, angle_repose, segregation_idx, w_equilibrium
             FROM components
             ORDER BY name
             """
@@ -109,7 +122,7 @@ def get_component_by_code(code: str, path: str | Path | None = None) -> Material
     with sqlite3.connect(db_path) as con:
         row = con.execute(
             """
-            SELECT code, name, type, d50, span, rho_bulk, hausner_ratio, w_initial, w_crit, cp, angle_repose
+            SELECT code, name, type, d50, span, rho_bulk, hausner_ratio, w_initial, w_crit, cp, angle_repose, segregation_idx, w_equilibrium
             FROM components
             WHERE code = ?
             """,

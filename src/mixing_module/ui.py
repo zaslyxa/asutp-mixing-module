@@ -14,6 +14,15 @@ if __package__ in (None, ""):
     from mixing_module.recipe_storage import load_recipe, save_recipe
     from mixing_module.recipes import get_recipe, recipe_names
     from mixing_module.material_db import get_component_by_code, init_material_db, list_components
+    from mixing_module.homogenization_metrics import calc_online_homogenization_series, component_contributions
+    from mixing_module.homogenization_opc import build_opc_payload
+    from mixing_module.homogenization_plots import (
+        component_contribution_dataframe,
+        concentration_profile_dataframe,
+        metrics_dataframe,
+    )
+    from mixing_module.homogenization_predictor import predict_endpoint, uncertainty_bands
+    from mixing_module.homogenization_report import export_homogenization_report
     from mixing_module.scaling import RecipeRow, scaling_engine, update_recipe_cache
     from mixing_module.wet_model import WetCascadeConfig, run_wet_cascade
 else:
@@ -21,6 +30,15 @@ else:
     from .recipe_storage import load_recipe, save_recipe
     from .recipes import get_recipe, recipe_names
     from .material_db import get_component_by_code, init_material_db, list_components
+    from .homogenization_metrics import calc_online_homogenization_series, component_contributions
+    from .homogenization_opc import build_opc_payload
+    from .homogenization_plots import (
+        component_contribution_dataframe,
+        concentration_profile_dataframe,
+        metrics_dataframe,
+    )
+    from .homogenization_predictor import predict_endpoint, uncertainty_bands
+    from .homogenization_report import export_homogenization_report
     from .scaling import RecipeRow, scaling_engine, update_recipe_cache
     from .wet_model import WetCascadeConfig, run_wet_cascade
 
@@ -106,6 +124,13 @@ def _ensure_default_state() -> None:
         "cell_volume_m3": 1.0,
         "q_l_target": 0.2,
         "material_row_count": 3,
+        "n_particles": 5000,
+        "alpha_seg": 0.3,
+        "beta_hygro": 0.15,
+        "gamma_seg": 0.01,
+        "rsd_target": 5.0,
+        "batch_id": "2026-001",
+        "report_path": "reports/homogenization_report.txt",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -172,6 +197,11 @@ def _apply_loaded_recipe(payload: dict[str, Any]) -> None:
                 if row.get("code") in by_code:
                     st.session_state[f"mat_name_{idx}"] = by_code[row["code"]]
                 st.session_state[f"mat_mass_{idx}"] = float(row.get("mass_kg", 0.0))
+    viz = payload.get("viz_config", {})
+    if viz:
+        for key in ("n_particles", "alpha_seg", "beta_hygro", "gamma_seg", "rsd_target", "batch_id", "report_path"):
+            if key in viz:
+                st.session_state[key] = viz[key]
 
 
 def _run_dry_view(duration_s: float, dt_s: float, cells: int, tau_s: float, kh: float, t_in: float, t_wall: float) -> dict[str, Any]:
@@ -296,6 +326,162 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
     }
     update_recipe_cache(material_payload)
     return auto_params, material_payload
+
+
+def _render_homogenization_viz(
+    *,
+    points: list,
+    key_component_idx: int,
+    component_inlet: list[float],
+    tau_s: float,
+    model_k: float,
+    material_payload: dict[str, Any],
+) -> dict[str, Any]:
+    st.subheader("HomogenizationViz - Mixing Quality")
+
+    n_particles = int(st.number_input("n_particles in sample", min_value=100, max_value=1_000_000, step=100, key="n_particles"))
+    alpha_seg = float(st.number_input("alpha_seg", min_value=0.0, max_value=2.0, step=0.01, key="alpha_seg"))
+    beta_hygro = float(st.number_input("beta_hygro", min_value=0.0, max_value=2.0, step=0.01, key="beta_hygro"))
+    gamma_seg = float(st.number_input("gamma_seg", min_value=0.0, max_value=1.0, step=0.001, key="gamma_seg"))
+    rsd_target = float(st.number_input("RSD target, %", min_value=0.5, max_value=30.0, step=0.5, key="rsd_target"))
+
+    times = [p.time_s for p in points]
+    c_cells_series = [[p.components[i][key_component_idx] for i in range(len(p.components))] for p in points]
+    moisture_out = [p.moisture[-1] for p in points]
+    c_bar = max(component_inlet[key_component_idx], 1e-6)
+    mixture = material_payload.get("scaled_mixture", {})
+    seg_mix = float(mixture.get("segregation_idx_mix", 0.3))
+    w_eq_mix = float(mixture.get("w_eq_mix", 0.0)) / 100.0
+
+    series = calc_online_homogenization_series(
+        times_s=times,
+        concentration_by_time=c_cells_series,
+        moisture_out_by_time=moisture_out,
+        c_bar=c_bar,
+        n_particles=n_particles,
+        segregation_idx_mix=seg_mix,
+        w_eq_mix=w_eq_mix,
+        alpha_seg=alpha_seg,
+        beta_hygro=beta_hygro,
+    )
+    df = metrics_dataframe(series)
+    last = series[-1]
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("RSD", f"{last.rsd_percent:.2f}%")
+        st.progress(min(last.rsd_percent / max(rsd_target, 1e-6), 1.0))
+    with c2:
+        st.metric("Lacey Index", f"{last.lacey_index:.3f}")
+        st.progress(min(max(last.lacey_index, 0.0), 1.0))
+    with c3:
+        st.metric("H_rel", f"{last.h_rel:.3f}")
+        st.progress(min(max(last.h_rel, 0.0), 1.0))
+
+    st.markdown("**Trend: sigma2(t) with bounds**")
+    st.line_chart(df, x="time_s", y=["sigma2", "sigma0_2", "sigma_r_eff_2"])
+
+    st.markdown("**Profile: c_i along axis**")
+    profile_df = concentration_profile_dataframe(c_cells_series[-1])
+    st.bar_chart(profile_df, x="cell", y="concentration")
+
+    h_target = 1.0 - (rsd_target / 100.0) ** 2
+    pred = predict_endpoint(
+        k_mix=model_k,
+        h_rel_current=last.h_rel,
+        h_rel_target=max(min(h_target, 0.99), 0.05),
+        tau_s=tau_s,
+        dt_s=max(times[1] - times[0], 1.0) if len(times) > 1 else 1.0,
+        gamma_seg=gamma_seg,
+        segregation_idx_mix=seg_mix,
+    )
+    pred_df = pd.DataFrame({"time_s": pred["times_s"], "h_pred": pred["h_pred"]})
+    st.markdown("**Prediction: H_rel(t + Δt)**")
+    st.line_chart(pred_df, x="time_s", y="h_pred")
+    st.info(f"Endpoint timer: time to target RSD<{rsd_target:.1f}% is {pred['t_remaining_s']:.1f} s")
+
+    bands = uncertainty_bands(df["rsd_percent"].tolist(), variance_rsd=0.04)
+    bands_df = pd.DataFrame(
+        {"time_s": df["time_s"], "rsd": df["rsd_percent"], "rsd_lower": bands["lower"], "rsd_upper": bands["upper"]}
+    )
+    st.markdown("**Uncertainty band (RSD ±2σ)**")
+    st.line_chart(bands_df, x="time_s", y=["rsd", "rsd_lower", "rsd_upper"])
+
+    st.subheader("Component analysis")
+    last_by_cell = [list(p.components) for p in [points[-1]]][0]
+    contribs = component_contributions(last_by_cell)
+    contrib_df = component_contribution_dataframe(contribs)
+    st.bar_chart(contrib_df, x="component", y="contribution")
+
+    heat_rows: list[dict[str, float | str]] = []
+    for i, cell in enumerate(last_by_cell, start=1):
+        for j, val in enumerate(cell, start=1):
+            avg = sum(r[j - 1] for r in last_by_cell) / len(last_by_cell)
+            rel = abs(val - avg) / max(avg, 1e-6)
+            heat_rows.append({"cell": f"Cell {i}", "component": f"Component {j}", "relative_dev": rel})
+    st.dataframe(pd.DataFrame(heat_rows), use_container_width=True)
+
+    st.subheader("What-if and optimization")
+    v_factor = st.slider("What-if rotor speed factor", 0.5, 2.0, 1.0, 0.05)
+    q_factor = st.slider("What-if liquid flow factor", 0.5, 2.0, 1.0, 0.05)
+    t_wall_factor = st.slider("What-if wall temperature delta, C", -20.0, 20.0, 0.0, 1.0)
+    k_whatif = model_k * (v_factor**0.7)
+    h_pred2 = predict_endpoint(
+        k_mix=k_whatif,
+        h_rel_current=last.h_rel,
+        h_rel_target=max(min(h_target, 0.99), 0.05),
+        tau_s=tau_s,
+        gamma_seg=gamma_seg,
+        segregation_idx_mix=seg_mix,
+    )
+    st.write(
+        {
+            "k_mix_whatif": round(k_whatif, 5),
+            "t_target_whatif_s": round(h_pred2["t_remaining_s"], 2),
+            "qL_factor": q_factor,
+            "Twall_delta": t_wall_factor,
+        }
+    )
+    if st.button("Apply Optimal (prepare setpoints payload)"):
+        st.success("Setpoints prepared (dry-run): apply to controller integration layer.")
+
+    opc_payload = build_opc_payload(
+        rsd=last.rsd_percent,
+        lacey=last.lacey_index,
+        h_rel=last.h_rel,
+        t_target_s=pred["t_remaining_s"],
+        profile_c=c_cells_series[-1],
+    )
+    st.subheader("OPC UA payload preview")
+    st.json(opc_payload)
+
+    report_path = st.text_input("Report output path", key="report_path")
+    batch_id = st.text_input("Batch id", key="batch_id")
+    top_contrib_idx = max(range(len(contribs)), key=lambda x: contribs[x]) if contribs else 0
+    if st.button("Export report"):
+        report_file = export_homogenization_report(
+            output_path=report_path,
+            batch_id=batch_id,
+            rsd=last.rsd_percent,
+            lacey=last.lacey_index,
+            h_rel=last.h_rel,
+            t_target_s=pred["t_remaining_s"],
+            main_component=f"Component {key_component_idx + 1}",
+            top_contributor=f"Component {top_contrib_idx + 1}",
+        )
+        st.success(f"Report exported: {report_file}")
+
+    return {
+        "n_particles": n_particles,
+        "alpha_seg": alpha_seg,
+        "beta_hygro": beta_hygro,
+        "gamma_seg": gamma_seg,
+        "rsd_target": rsd_target,
+        "batch_id": batch_id,
+        "report_path": report_path,
+        "opc_payload": opc_payload,
+        "endpoint_prediction": pred,
+    }
 
 
 def _run_wet_view(
@@ -461,6 +647,21 @@ def _run_wet_view(
     st.subheader("Outlet temperature")
     st.line_chart(scalars_df, x="time_s", y="t_out")
 
+    key_component_idx = st.selectbox(
+        "Key component for homogenization metrics",
+        options=list(range(n_components)),
+        format_func=lambda x: f"Component {x + 1}",
+        index=0,
+    )
+    viz_payload = _render_homogenization_viz(
+        points=points,
+        key_component_idx=key_component_idx,
+        component_inlet=inlet,
+        tau_s=tau_s,
+        model_k=cfg.cells / max(cfg.tau_s, 1e-6),
+        material_payload=material_payload,
+    )
+
     last = points[-1]
     st.info(
         f"Wet outlet at t={last.time_s:.1f}s: w_out={last.moisture[-1]:.4f}, "
@@ -499,6 +700,7 @@ def _run_wet_view(
             "gas_strip_gain": gas_strip_gain,
         },
         "material_config": material_payload,
+        "viz_config": viz_payload,
     }
 
 

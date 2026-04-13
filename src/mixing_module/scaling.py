@@ -52,6 +52,8 @@ def scaling_engine(
     span_mix = _weighted(rows, "span")
     angle_mix = _weighted(rows, "angle_repose")
     hausner_mix = _weighted(rows, "hausner_ratio")
+    segregation_mix = _weighted(rows, "segregation_idx")
+    w_eq_mix = _weighted(rows, "w_equilibrium")
     w_crit_mix = min(r.component.w_crit for r in rows)
 
     k = k_ref * (rho_ref / rho_mix) ** 0.3 * _hausner_factor(hausner_mix)
@@ -75,6 +77,8 @@ def scaling_engine(
             "hausner_mix": hausner_mix,
             "span_mix": span_mix,
             "angle_repose_mix": angle_mix,
+            "segregation_idx_mix": segregation_mix,
+            "w_eq_mix": w_eq_mix,
         },
         "model": {
             "k": k,

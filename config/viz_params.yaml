@@ -1,0 +1,8 @@
+rsd_target_percent: 5.0
+alpha_seg: 0.3
+beta_hygro: 0.15
+gamma_seg: 0.01
+n_particles: 5000
+dashboard_update_hz: 1.0
+trend_update_hz: 0.5
+prediction_update_hz: 0.2
