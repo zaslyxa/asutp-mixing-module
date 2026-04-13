@@ -6,6 +6,7 @@ import sys
 
 import pandas as pd
 import streamlit as st
+import matplotlib.pyplot as plt
 
 if __package__ in (None, ""):
     # Support direct execution by Streamlit: `streamlit run src/mixing_module/ui.py`
@@ -23,6 +24,10 @@ if __package__ in (None, ""):
     )
     from mixing_module.homogenization_predictor import predict_endpoint, uncertainty_bands
     from mixing_module.homogenization_report import export_homogenization_report
+    from mixing_module.h_kinetics import HMixConfig
+    from mixing_module.mix_quality_runtime import MixQualityRuntime
+    from mixing_module.historian import append_h_sample, init_historian_db, list_batches, load_batch_curve
+    from mixing_module.io_contracts import mqtt_topics
     from mixing_module.scaling import RecipeRow, scaling_engine, update_recipe_cache
     from mixing_module.wet_model import WetCascadeConfig, run_wet_cascade
 else:
@@ -39,6 +44,10 @@ else:
     )
     from .homogenization_predictor import predict_endpoint, uncertainty_bands
     from .homogenization_report import export_homogenization_report
+    from .h_kinetics import HMixConfig
+    from .mix_quality_runtime import MixQualityRuntime
+    from .historian import append_h_sample, init_historian_db, list_batches, load_batch_curve
+    from .io_contracts import mqtt_topics
     from .scaling import RecipeRow, scaling_engine, update_recipe_cache
     from .wet_model import WetCascadeConfig, run_wet_cascade
 
@@ -131,6 +140,9 @@ def _ensure_default_state() -> None:
         "rsd_target": 5.0,
         "batch_id": "2026-001",
         "report_path": "reports/homogenization_report.txt",
+        "historian_db_path": "config/historian.db",
+        "mixer_id": "mx-01",
+        "viz_mode": "online",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -199,7 +211,18 @@ def _apply_loaded_recipe(payload: dict[str, Any]) -> None:
                 st.session_state[f"mat_mass_{idx}"] = float(row.get("mass_kg", 0.0))
     viz = payload.get("viz_config", {})
     if viz:
-        for key in ("n_particles", "alpha_seg", "beta_hygro", "gamma_seg", "rsd_target", "batch_id", "report_path"):
+        for key in (
+            "n_particles",
+            "alpha_seg",
+            "beta_hygro",
+            "gamma_seg",
+            "rsd_target",
+            "batch_id",
+            "report_path",
+            "historian_db_path",
+            "mixer_id",
+            "viz_mode",
+        ):
             if key in viz:
                 st.session_state[key] = viz[key]
 
@@ -388,6 +411,11 @@ def _render_homogenization_viz(
     beta_hygro = float(st.number_input("beta_hygro", min_value=0.0, max_value=2.0, step=0.01, key="beta_hygro"))
     gamma_seg = float(st.number_input("gamma_seg", min_value=0.0, max_value=1.0, step=0.001, key="gamma_seg"))
     rsd_target = float(st.number_input("RSD target, %", min_value=0.5, max_value=30.0, step=0.5, key="rsd_target"))
+    batch_id = st.text_input("Batch id", key="batch_id")
+    historian_db_path = st.text_input("Historian DB path", key="historian_db_path")
+    mixer_id = st.text_input("Mixer id", key="mixer_id")
+    viz_mode = st.selectbox("View mode", options=["online", "post-batch", "predictive"], key="viz_mode")
+    init_historian_db(historian_db_path)
 
     times = [p.time_s for p in points]
     c_cells_series = [[p.components[i][key_component_idx] for i in range(len(p.components))] for p in points]
@@ -411,6 +439,84 @@ def _render_homogenization_viz(
     df = metrics_dataframe(series)
     last = series[-1]
 
+    h_cfg = HMixConfig(
+        k0=max(model_k * 0.2, 0.001),
+        k_n=0.0008,
+        k_D=0.1,
+        k_w=0.002,
+        k_Q=0.0005,
+        q_s0=0.5,
+        h_target=1.0 - (rsd_target / 100.0) ** 2,
+        ts_s=max(times[1] - times[0], 1.0) if len(times) > 1 else 1.0,
+    )
+    runtime = MixQualityRuntime(config=h_cfg)
+    runtime.new_batch(batch_id=batch_id)
+    for i, p in enumerate(points):
+        n_sig = 400.0 + 50.0 * (i / max(len(points) - 1, 1))
+        d_sig = 1.0 if i > 3 else 0.0
+        w_sig = p.moisture[-1] * 100.0
+        qs_sig = 0.5 + 0.05 * p.components[-1][key_component_idx]
+        p_sig = 1.0 - 0.4 * min(p.time_s / max(times[-1], 1.0), 1.0)
+        runtime.ingest(n=n_sig, d=d_sig, w=w_sig, q_s=qs_sig, p=p_sig)
+    h_curve_df = pd.DataFrame([{"time_s": s.t_s, "H": s.h, "k_mix": s.k_mix} for s in runtime.samples])
+    h_curve_df["RSD_backcalc"] = (1.0 - h_curve_df["H"]) * 100.0
+
+    if viz_mode == "online":
+        st.markdown("**Main chart: H(t)**")
+        st.line_chart(h_curve_df, x="time_s", y="H")
+        st.line_chart(pd.DataFrame({"time_s": h_curve_df["time_s"], "H_target": [h_cfg.h_target] * len(h_curve_df)}), x="time_s", y="H_target")
+        st.metric("Current H", f"{runtime.h:.3f}")
+        st.metric("Current k_mix", f"{runtime.samples[-1].k_mix:.4f} 1/s")
+        if runtime.h < h_cfg.h_target:
+            t_rem = max((-(1 - h_cfg.h_target) + (1 - runtime.h)), 0.0) / max(runtime.samples[-1].k_mix, 1e-6)
+        else:
+            t_rem = 0.0
+        st.metric("Estimated time to target, s", f"{t_rem:.1f}")
+
+        old_batches = list_batches(historian_db_path)
+        if old_batches:
+            overlay_batch = st.selectbox("Overlay batch", options=["None"] + old_batches)
+            if overlay_batch != "None":
+                old = load_batch_curve(overlay_batch, historian_db_path)
+                if old:
+                    old_df = pd.DataFrame(old).rename(columns={"h": "H_overlay", "t_s": "time_s"})
+                    st.line_chart(old_df, x="time_s", y="H_overlay")
+        if st.button("Store current H-curve to Historian"):
+            for sample in runtime.samples:
+                append_h_sample(batch_id, sample, historian_db_path)
+            st.success("Batch curve stored")
+
+    elif viz_mode == "post-batch":
+        batches = list_batches(historian_db_path)
+        if not batches:
+            st.info("No stored batches yet")
+        else:
+            selected = st.selectbox("Stored batch", options=batches)
+            curve = load_batch_curve(selected, historian_db_path)
+            if curve:
+                curve_df = pd.DataFrame(curve).rename(columns={"t_s": "time_s", "h": "H"})
+                st.line_chart(curve_df, x="time_s", y="H")
+                st.line_chart(curve_df, x="time_s", y="k_mix")
+
+    else:
+        v_factor = st.slider("What-if rotor speed factor", 0.5, 2.0, 1.0, 0.05)
+        q_factor = st.slider("What-if liquid flow factor", 0.5, 2.0, 1.0, 0.05)
+        k_whatif = model_k * (v_factor**0.7) * (1.0 + 0.1 * (q_factor - 1.0))
+        pred_h = predict_endpoint(
+            k_mix=k_whatif,
+            h_rel_current=runtime.h,
+            h_rel_target=h_cfg.h_target,
+            tau_s=tau_s,
+            gamma_seg=gamma_seg,
+            segregation_idx_mix=seg_mix,
+        )
+        st.line_chart(pd.DataFrame({"time_s": pred_h["times_s"], "H_pred": pred_h["h_pred"]}), x="time_s", y="H_pred")
+        st.metric("Predicted time to target, s", f"{pred_h['t_remaining_s']:.1f}")
+
+    mode_switch = st.radio("Display metric", options=["H(t)", "RSD(t)"])
+    if mode_switch == "RSD(t)":
+        st.line_chart(h_curve_df, x="time_s", y="RSD_backcalc")
+
     c1, c2, c3 = st.columns(3)
     with c1:
         st.metric("RSD", f"{last.rsd_percent:.2f}%")
@@ -429,11 +535,10 @@ def _render_homogenization_viz(
     profile_df = concentration_profile_dataframe(c_cells_series[-1])
     st.bar_chart(profile_df, x="cell", y="concentration")
 
-    h_target = 1.0 - (rsd_target / 100.0) ** 2
     pred = predict_endpoint(
         k_mix=model_k,
         h_rel_current=last.h_rel,
-        h_rel_target=max(min(h_target, 0.99), 0.05),
+        h_rel_target=max(min(h_cfg.h_target, 0.99), 0.05),
         tau_s=tau_s,
         dt_s=max(times[1] - times[0], 1.0) if len(times) > 1 else 1.0,
         gamma_seg=gamma_seg,
@@ -465,27 +570,6 @@ def _render_homogenization_viz(
             heat_rows.append({"cell": f"Cell {i}", "component": f"Component {j}", "relative_dev": rel})
     st.dataframe(pd.DataFrame(heat_rows), use_container_width=True)
 
-    st.subheader("What-if and optimization")
-    v_factor = st.slider("What-if rotor speed factor", 0.5, 2.0, 1.0, 0.05)
-    q_factor = st.slider("What-if liquid flow factor", 0.5, 2.0, 1.0, 0.05)
-    t_wall_factor = st.slider("What-if wall temperature delta, C", -20.0, 20.0, 0.0, 1.0)
-    k_whatif = model_k * (v_factor**0.7)
-    h_pred2 = predict_endpoint(
-        k_mix=k_whatif,
-        h_rel_current=last.h_rel,
-        h_rel_target=max(min(h_target, 0.99), 0.05),
-        tau_s=tau_s,
-        gamma_seg=gamma_seg,
-        segregation_idx_mix=seg_mix,
-    )
-    st.write(
-        {
-            "k_mix_whatif": round(k_whatif, 5),
-            "t_target_whatif_s": round(h_pred2["t_remaining_s"], 2),
-            "qL_factor": q_factor,
-            "Twall_delta": t_wall_factor,
-        }
-    )
     if st.button("Apply Optimal (prepare setpoints payload)"):
         st.success("Setpoints prepared (dry-run): apply to controller integration layer.")
 
@@ -498,9 +582,9 @@ def _render_homogenization_viz(
     )
     st.subheader("OPC UA payload preview")
     st.json(opc_payload)
+    st.caption(f"MQTT topics: {mqtt_topics(mixer_id)}")
 
     report_path = st.text_input("Report output path", key="report_path")
-    batch_id = st.text_input("Batch id", key="batch_id")
     top_contrib_idx = max(range(len(contribs)), key=lambda x: contribs[x]) if contribs else 0
     if st.button("Export report"):
         report_file = export_homogenization_report(
@@ -515,6 +599,24 @@ def _render_homogenization_viz(
         )
         st.success(f"Report exported: {report_file}")
 
+    if st.button("Export H-curve CSV and PNG"):
+        export_dir = Path("reports")
+        export_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = export_dir / f"{batch_id}_h_curve.csv"
+        png_path = export_dir / f"{batch_id}_h_curve.png"
+        h_curve_df.to_csv(csv_path, index=False)
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(h_curve_df["time_s"], h_curve_df["H"], color="green", linewidth=2, label="H(t)")
+        ax.axhline(y=h_cfg.h_target, color="red", linestyle="--", label="H_target")
+        ax.set_xlabel("time_s")
+        ax.set_ylabel("H")
+        ax.set_ylim(0, 1.02)
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(png_path)
+        plt.close(fig)
+        st.success(f"Exported: {csv_path} and {png_path}")
+
     return {
         "n_particles": n_particles,
         "alpha_seg": alpha_seg,
@@ -523,6 +625,9 @@ def _render_homogenization_viz(
         "rsd_target": rsd_target,
         "batch_id": batch_id,
         "report_path": report_path,
+        "historian_db_path": historian_db_path,
+        "mixer_id": mixer_id,
+        "viz_mode": viz_mode,
         "opc_payload": opc_payload,
         "endpoint_prediction": pred,
     }

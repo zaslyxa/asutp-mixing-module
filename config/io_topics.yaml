@@ -1,0 +1,13 @@
+mixer_id: mx-01
+inputs:
+  - telemetry/mixer/{id}/speed
+  - telemetry/mixer/{id}/current
+  - telemetry/mixer/{id}/temperature
+  - telemetry/mixer/{id}/humidity
+  - telemetry/mixer/{id}/flow_solid
+  - telemetry/mixer/{id}/flow_liquid
+  - telemetry/mixer/{id}/deagglomerator
+outputs:
+  - model/mixer/{id}/state
+  - model/mixer/{id}/ready
+  - model/mixer/{id}/graph_data
