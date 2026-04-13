@@ -15,6 +15,9 @@ env/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+config/materials.db
+config/recipe_cache.json
+recipes/
 
 # IDE/OS
 .idea/

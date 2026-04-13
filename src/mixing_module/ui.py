@@ -143,9 +143,9 @@ def _ensure_default_state() -> None:
 def _apply_loaded_recipe(payload: dict[str, Any]) -> None:
     model = payload.get("model", "dry-cascade")
     if model == "wet-cascade":
-        st.session_state["selected_recipe_name"] = "Wet granulation with binder"
+        st.session_state["selected_recipe_name"] = "Wet mixing"
     else:
-        st.session_state["selected_recipe_name"] = "Dry powder blending"
+        st.session_state["selected_recipe_name"] = "Dry mixing"
 
     shared = payload.get("shared", {})
     for key in ("duration_s", "dt_s", "cells", "tau_s", "kh", "t_in", "t_wall"):
@@ -204,7 +204,22 @@ def _apply_loaded_recipe(payload: dict[str, Any]) -> None:
                 st.session_state[key] = viz[key]
 
 
-def _run_dry_view(duration_s: float, dt_s: float, cells: int, tau_s: float, kh: float, t_in: float, t_wall: float) -> dict[str, Any]:
+def _run_dry_view(
+    duration_s: float,
+    dt_s: float,
+    cells: int,
+    tau_s: float,
+    kh: float,
+    t_in: float,
+    t_wall: float,
+    auto_params: dict[str, float],
+    material_payload: dict[str, Any],
+) -> dict[str, Any]:
+    if auto_params:
+        tau_s = float(auto_params.get("tau_s", tau_s))
+        kh = float(auto_params.get("kh", kh))
+        st.info(f"MaterialConfig auto-scaling applied for dry model: tau={tau_s:.2f}, kh={kh:.4f}")
+
     cfg = DryCascadeConfig(
         duration_s=duration_s,
         dt_s=dt_s,
@@ -242,6 +257,7 @@ def _run_dry_view(duration_s: float, dt_s: float, cells: int, tau_s: float, kh: 
             "t_in": t_in,
             "t_wall": t_wall,
         },
+        "material_config": material_payload,
     }
 
 
@@ -272,6 +288,34 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
         if mass > 0:
             code = name_to_code[selected]
             recipe_rows.append(RecipeRow(component=get_component_by_code(code, db_path), mass_kg=mass))
+
+    if recipe_rows:
+        st.markdown("**Selected components and characteristics**")
+        total_mass = sum(r.mass_kg for r in recipe_rows)
+        table_rows: list[dict[str, float | str]] = []
+        for r in recipe_rows:
+            c = r.component
+            share = (r.mass_kg / total_mass * 100.0) if total_mass > 0 else 0.0
+            table_rows.append(
+                {
+                    "code": c.code,
+                    "name": c.name,
+                    "type": c.type,
+                    "mass_kg": round(r.mass_kg, 3),
+                    "share_%": round(share, 2),
+                    "d50_um": round(c.d50, 3),
+                    "span": round(c.span, 3),
+                    "rho_bulk": round(c.rho_bulk, 3),
+                    "hausner": round(c.hausner_ratio, 3),
+                    "w_initial_%": round(c.w_initial, 3),
+                    "w_crit_%": round(c.w_crit, 3),
+                    "w_eq_%": round(c.w_equilibrium, 3),
+                    "cp_JkgK": round(c.cp, 3),
+                    "angle_repose_deg": round(c.angle_repose, 3),
+                    "segregation_idx": round(c.segregation_idx, 3),
+                }
+            )
+        st.dataframe(pd.DataFrame(table_rows), use_container_width=True)
 
     use_scaling = st.checkbox("Use auto scaling from material properties", key="use_material_scaling")
     rotor_speed = st.number_input("Rotor speed factor", min_value=0.1, max_value=10.0, step=0.1, key="rotor_speed")
@@ -492,8 +536,9 @@ def _run_wet_view(
     kh: float,
     t_in: float,
     t_wall: float,
+    auto_params: dict[str, float],
+    material_payload: dict[str, Any],
 ) -> dict[str, Any]:
-    auto_params, material_payload = _render_material_config(cells=cells)
     if auto_params:
         tau_s = float(auto_params.get("tau_s", tau_s))
         kh = float(auto_params.get("kh", kh))
@@ -737,6 +782,8 @@ def run_app() -> None:
         t_in = st.slider("Inlet temperature, C", 10.0, 80.0, 25.0, 1.0, key="t_in")
         t_wall = st.slider("Wall temperature, C", 10.0, 80.0, 30.0, 1.0, key="t_wall")
 
+    auto_params, material_payload = _render_material_config(cells=cells)
+
     if recipe.model == "dry-cascade":
         current_payload = _run_dry_view(
             duration_s=duration_s,
@@ -746,6 +793,8 @@ def run_app() -> None:
             kh=kh,
             t_in=t_in,
             t_wall=t_wall,
+            auto_params=auto_params,
+            material_payload=material_payload,
         )
     else:
         current_payload = _run_wet_view(
@@ -756,6 +805,8 @@ def run_app() -> None:
             kh=kh,
             t_in=t_in,
             t_wall=t_wall,
+            auto_params=auto_params,
+            material_payload=material_payload,
         )
 
     with st.sidebar:

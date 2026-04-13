@@ -12,12 +12,12 @@ class RecipePreset:
 
 RECIPE_PRESETS: tuple[RecipePreset, ...] = (
     RecipePreset(
-        name="Dry powder blending",
+        name="Dry mixing",
         model="dry-cascade",
         note="No liquid binder injection; RTD dry cascade model.",
     ),
     RecipePreset(
-        name="Wet granulation with binder",
+        name="Wet mixing",
         model="wet-cascade",
         note="Liquid injection and reduced PBM quality state are enabled.",
     ),
