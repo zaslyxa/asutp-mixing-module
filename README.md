@@ -11,6 +11,7 @@ The module includes:
 - optional chemical reaction block with effects (heat release, precipitation, gas evolution);
 - recipe-driven model selection (dry/wet);
 - recipe save/load in JSON and YAML formats;
+- MaterialConfig layer: component database (SQLite) + recipe scaling to model parameters;
 - thermal channel dynamics per compartment;
 - CLI runner for tank and cascade modes;
 - Streamlit UI for process visualization;
@@ -40,6 +41,7 @@ python -m streamlit run src/mixing_module/ui.py
 ```
 
 In UI sidebar you can load and save recipe files (for example `recipes/my_recipe.yaml`).
+For wet recipes, MaterialConfig computes effective mixture properties and auto-scales model parameters (`tau`, `kh`, `Ka`, `b_q`) from material data.
 
 6. Run tests:
 

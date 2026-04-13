@@ -1,6 +1,8 @@
 """ASUTP mixing simulation module."""
 
 from .cascade import DryCascadeConfig, DryCascadePoint, run_dry_cascade
+from .material_db import MaterialComponent, get_component_by_code, init_material_db, list_components
+from .scaling import RecipeRow, scaling_engine
 from .wet_model import WetCascadeConfig, WetCascadePoint, run_wet_cascade
 from .simulator import SimulationConfig, SimulationPoint, run_simulation
 
@@ -11,6 +13,12 @@ __all__ = [
     "WetCascadePoint",
     "run_dry_cascade",
     "run_wet_cascade",
+    "MaterialComponent",
+    "RecipeRow",
+    "init_material_db",
+    "list_components",
+    "get_component_by_code",
+    "scaling_engine",
     "SimulationConfig",
     "SimulationPoint",
     "run_simulation",

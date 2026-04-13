@@ -1,14 +1,28 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
+import sys
 
 import pandas as pd
 import streamlit as st
 
-from .cascade import DryCascadeConfig, run_dry_cascade
-from .recipe_storage import load_recipe, save_recipe
-from .recipes import get_recipe, recipe_names
-from .wet_model import WetCascadeConfig, run_wet_cascade
+if __package__ in (None, ""):
+    # Support direct execution by Streamlit: `streamlit run src/mixing_module/ui.py`
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from mixing_module.cascade import DryCascadeConfig, run_dry_cascade
+    from mixing_module.recipe_storage import load_recipe, save_recipe
+    from mixing_module.recipes import get_recipe, recipe_names
+    from mixing_module.material_db import get_component_by_code, init_material_db, list_components
+    from mixing_module.scaling import RecipeRow, scaling_engine, update_recipe_cache
+    from mixing_module.wet_model import WetCascadeConfig, run_wet_cascade
+else:
+    from .cascade import DryCascadeConfig, run_dry_cascade
+    from .recipe_storage import load_recipe, save_recipe
+    from .recipes import get_recipe, recipe_names
+    from .material_db import get_component_by_code, init_material_db, list_components
+    from .scaling import RecipeRow, scaling_engine, update_recipe_cache
+    from .wet_model import WetCascadeConfig, run_wet_cascade
 
 
 def _build_dry_concentration_series(points: list) -> pd.DataFrame:
@@ -86,6 +100,12 @@ def _ensure_default_state() -> None:
         "heat_release_gain": 5.0,
         "precipitation_gain": 0.02,
         "gas_strip_gain": 0.01,
+        "material_db_path": "config/materials.db",
+        "use_material_scaling": True,
+        "rotor_speed": 1.0,
+        "cell_volume_m3": 1.0,
+        "q_l_target": 0.2,
+        "material_row_count": 3,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -138,6 +158,20 @@ def _apply_loaded_recipe(payload: dict[str, Any]) -> None:
         ):
             if key in wet:
                 st.session_state[key] = wet[key]
+    material = payload.get("material_config", {})
+    if material:
+        for key in ("use_material_scaling", "rotor_speed", "cell_volume_m3", "q_l_target"):
+            if key in material:
+                st.session_state[key] = material[key]
+        rows = material.get("rows", [])
+        if rows:
+            st.session_state["material_row_count"] = len(rows)
+            components = list_components(st.session_state.get("material_db_path"))
+            by_code = {c.code: f"{c.name} ({c.code})" for c in components}
+            for idx, row in enumerate(rows):
+                if row.get("code") in by_code:
+                    st.session_state[f"mat_name_{idx}"] = by_code[row["code"]]
+                st.session_state[f"mat_mass_{idx}"] = float(row.get("mass_kg", 0.0))
 
 
 def _run_dry_view(duration_s: float, dt_s: float, cells: int, tau_s: float, kh: float, t_in: float, t_wall: float) -> dict[str, Any]:
@@ -181,6 +215,89 @@ def _run_dry_view(duration_s: float, dt_s: float, cells: int, tau_s: float, kh: 
     }
 
 
+def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any]]:
+    st.subheader("MaterialConfig")
+    db_path = st.text_input("Material DB path", key="material_db_path")
+    init_material_db(db_path)
+    available = list_components(db_path)
+    names = [f"{c.name} ({c.code})" for c in available]
+    name_to_code = {f"{c.name} ({c.code})": c.code for c in available}
+
+    st.caption("Select components from database and set masses for scaling")
+    recipe_rows: list[RecipeRow] = []
+    mat_count = st.slider("Material rows", 1, 8, 3, 1, key="material_row_count")
+    for i in range(mat_count):
+        col_l, col_r = st.columns([3, 1])
+        with col_l:
+            key_name = f"mat_name_{i}"
+            if key_name not in st.session_state or st.session_state[key_name] not in names:
+                st.session_state[key_name] = names[0]
+            selected = st.selectbox(
+                f"Material {i+1}",
+                options=names,
+                key=key_name,
+            )
+        with col_r:
+            mass = st.number_input(f"kg #{i+1}", min_value=0.0, value=10.0 if i == 0 else 0.0, step=1.0, key=f"mat_mass_{i}")
+        if mass > 0:
+            code = name_to_code[selected]
+            recipe_rows.append(RecipeRow(component=get_component_by_code(code, db_path), mass_kg=mass))
+
+    use_scaling = st.checkbox("Use auto scaling from material properties", key="use_material_scaling")
+    rotor_speed = st.number_input("Rotor speed factor", min_value=0.1, max_value=10.0, step=0.1, key="rotor_speed")
+    cell_volume_m3 = st.number_input("Cell volume, m3", min_value=0.001, max_value=20.0, step=0.1, key="cell_volume_m3")
+    q_l_target = st.number_input("Target liquid flow qL", min_value=0.0, max_value=5.0, step=0.05, key="q_l_target")
+
+    if not recipe_rows:
+        st.warning("Add at least one material with mass > 0 to enable scaling")
+        return {}, {"rows": [], "use_material_scaling": use_scaling}
+
+    scaled = scaling_engine(
+        recipe_rows,
+        rotor_speed=rotor_speed,
+        q_l_target=q_l_target,
+        cell_volume_m3=cell_volume_m3,
+    )
+    mixture = scaled["mixture"]
+    model = scaled["model"]
+    st.markdown("**Mixture effective properties**")
+    st.write(
+        {
+            "rho_b_mix": round(mixture["rho_b_mix"], 3),
+            "cp_mix": round(mixture["cp_mix"], 3),
+            "w0_mix": round(mixture["w0_mix"], 3),
+            "w_crit_mix": round(mixture["w_crit_mix"], 3),
+            "hausner_mix": round(mixture["hausner_mix"], 3),
+        }
+    )
+    if scaled["warnings"]:
+        for warning in scaled["warnings"]:
+            st.warning(warning)
+
+    auto_params: dict[str, float] = {}
+    if use_scaling:
+        auto_params = {
+            "tau_s": cells / max(model["k"], 1e-6),
+            "kh": model["kh"],
+            "ka": model["ka"],
+            "b_q": model["b_q"],
+            "w0": mixture["w0_mix"] / 100.0,
+            "w_star": mixture["w_crit_mix"] / 100.0,
+        }
+
+    material_payload = {
+        "use_material_scaling": use_scaling,
+        "rotor_speed": rotor_speed,
+        "cell_volume_m3": cell_volume_m3,
+        "q_l_target": q_l_target,
+        "rows": [{"code": r.component.code, "mass_kg": r.mass_kg} for r in recipe_rows],
+        "scaled_model": model,
+        "scaled_mixture": mixture,
+    }
+    update_recipe_cache(material_payload)
+    return auto_params, material_payload
+
+
 def _run_wet_view(
     duration_s: float,
     dt_s: float,
@@ -189,7 +306,12 @@ def _run_wet_view(
     kh: float,
     t_in: float,
     t_wall: float,
-) -> None:
+) -> dict[str, Any]:
+    auto_params, material_payload = _render_material_config(cells=cells)
+    if auto_params:
+        tau_s = float(auto_params.get("tau_s", tau_s))
+        kh = float(auto_params.get("kh", kh))
+
     st.subheader("Recipe components")
     n_components = st.slider("Number of components in recipe", 1, 10, 3, 1, key="n_components")
     inlet: list[float] = []
@@ -234,6 +356,16 @@ def _run_wet_view(
         ka = st.number_input("Agglomeration Ka", min_value=0.0, max_value=1.0, step=0.001, key="ka")
         kb = st.number_input("Breakage Kb", min_value=0.0, max_value=1.0, step=0.001, key="kb")
         w_star = st.number_input("Reference moisture w*", min_value=0.0, max_value=1.0, step=0.01, key="w_star")
+
+    if auto_params:
+        ka = float(auto_params.get("ka", ka))
+        b_q = float(auto_params.get("b_q", b_q))
+        w0 = float(auto_params.get("w0", w0))
+        w_star = float(auto_params.get("w_star", w_star))
+        st.info(
+            "MaterialConfig auto-scaling applied: "
+            f"tau={tau_s:.2f}, kh={kh:.4f}, Ka={ka:.4f}, b_q={b_q:.6f}, w0={w0:.4f}, w*={w_star:.4f}"
+        )
 
     st.subheader("Chemical reaction block")
     reaction_enabled = st.checkbox(
@@ -366,6 +498,7 @@ def _run_wet_view(
             "precipitation_gain": precipitation_gain,
             "gas_strip_gain": gas_strip_gain,
         },
+        "material_config": material_payload,
     }
 
 
