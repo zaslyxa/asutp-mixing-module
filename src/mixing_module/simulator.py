@@ -54,7 +54,7 @@ def run_simulation(cfg: SimulationConfig) -> list[SimulationPoint]:
     concentration = cfg.initial_concentration
     timeline: list[SimulationPoint] = [SimulationPoint(0.0, concentration, volume)]
 
-    steps = int(cfg.duration_s / cfg.dt_s)
+    steps = int(round(cfg.duration_s / cfg.dt_s))
     for step in range(1, steps + 1):
         volume, concentration = _next_state(volume, concentration, cfg)
         timeline.append(SimulationPoint(step * cfg.dt_s, concentration, volume))

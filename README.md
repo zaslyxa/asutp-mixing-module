@@ -5,11 +5,16 @@ This repository is prepared as an isolated module that can later be integrated i
 
 ## Current status
 
-Initial project scaffold is ready:
-- core simulation domain model;
-- deterministic simulation runner;
-- simple CLI entry point;
-- baseline unit tests.
+The module includes:
+- dry mixing CSTR-in-series simulation core (RTD-compatible reduced model);
+- full wet model (components 1..N, moisture, PBM proxy eta, temperature);
+- optional chemical reaction block with effects (heat release, precipitation, gas evolution);
+- recipe-driven model selection (dry/wet);
+- recipe save/load in JSON and YAML formats;
+- thermal channel dynamics per compartment;
+- CLI runner for tank and cascade modes;
+- Streamlit UI for process visualization;
+- baseline tests and technical documentation.
 
 ## Quick start
 
@@ -21,27 +26,47 @@ Initial project scaffold is ready:
 pip install -e .[dev]
 ```
 
-4. Run CLI demo:
+4. Run CLI demo (wet cascade):
 
 ```bash
-python -m mixing_module.cli --seconds 30 --step 0.5
+python -m mixing_module.cli --model wet-cascade --seconds 120 --step 1 --cells 3 --tau 45 --kh 0.02 --components 3 --reaction
 ```
 
-5. Run tests:
+5. Run UI visualization:
+
+```bash
+pip install -e .[ui]
+python -m streamlit run src/mixing_module/ui.py
+```
+
+In UI sidebar you can load and save recipe files (for example `recipes/my_recipe.yaml`).
+
+6. Run tests:
 
 ```bash
 pytest -q
 ```
 
-## Module scope (to be finalized by technical specification)
+## Mathematical basis
+
+The repository now documents the mathematical apparatus from the provided technical specifications:
+- model hierarchy DEM/KTGF/PDE/RTD/PBM;
+- reduced state-space equations for dry and wet regimes (`c`, `w`, `eta`);
+- assumptions and applicability limits for control use-cases.
+
+See:
+- `docs/mathematical-apparatus.md`
+- `docs/error-check-report.md`
+
+## Module scope (next milestones)
 
 - input stream flow rates and temperatures;
-- tank volume and concentration tracking over time;
-- simple quality check for target concentration;
+- concentration and temperature tracking by compartments;
+- recipe-level persistence and import/export;
 - extension points for control-loop integration.
 
 ## Planned next steps
 
-- formalize equations and constraints from technical specification;
-- add configuration file support and scenario presets;
-- add charts/export for simulation results.
+- add RTD identification and parameter calibration tools;
+- add export of simulated trajectories for ASUTP integration tests;
+- connect model-choice logic to external recipe storage.
