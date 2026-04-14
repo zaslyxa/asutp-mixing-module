@@ -952,8 +952,26 @@ def _run_dry_view(
     c_df = _build_dry_concentration_series(points)
     t_df = _build_temperature_series(points)
     model_k = cfg.cells / max(cfg.tau_s, 1e-6)
+    mix = material_payload.get("scaled_mixture", {})
+    n_components = max(len(material_payload.get("rows", [])), 1)
+    seg_mix = float(mix.get("segregation_idx_mix", 0.3))
+    span_mix = float(mix.get("span_mix", 1.5))
+    rho_b_mix = float(mix.get("rho_b_mix", 1200.0))
+    mixer_mass = float(mixer_payload.get("mixer_loaded_mass_kg", 1000.0))
+    mixer_volume = float(mixer_payload.get("mixer_volume_m3", 2.0))
+    mixer_fill = float(mixer_payload.get("mixer_fill_factor", 0.6))
+    nominal_mass = max(mixer_volume * mixer_fill * max(rho_b_mix, 1e-6), 1e-6)
+    loading_ratio = max(min(mixer_mass / nominal_mass, 2.0), 0.5)
+    complexity_penalty = (
+        1.0
+        + 0.12 * max(n_components - 2, 0)
+        + 0.35 * max(seg_mix - 0.3, 0.0)
+        + 0.08 * max(span_mix - 1.5, 0.0)
+        + 0.25 * max(loading_ratio - 1.0, 0.0)
+    )
+    k0_eff = max(model_k * 0.2 / max(complexity_penalty, 1e-6), 0.001)
     h_cfg = HMixConfig(
-        k0=max(model_k * 0.2, 0.001),
+        k0=k0_eff,
         k_n=0.0008,
         k_D=0.1,
         k_w=0.002,
@@ -965,12 +983,11 @@ def _run_dry_view(
     runtime = MixQualityRuntime(config=h_cfg)
     runtime.new_batch("dry-graph-view")
     mixer_speed_rpm = float(mixer_payload.get("mixer_speed_rpm", 30.0))
-    mixer_mass = float(mixer_payload.get("mixer_loaded_mass_kg", 1000.0))
     for i, p in enumerate(points):
         n_sig = mixer_speed_rpm * 12.0
-        d_sig = 1.0 if i > 3 else 0.0
+        d_sig = 1.0 if i > int(3 + 0.3 * max(n_components - 1, 0)) else 0.0
         w_sig = 0.2
-        q_s_sig = max(mixer_mass / max(duration_s, 1.0) / 1000.0, 0.1)
+        q_s_sig = max(mixer_mass / max(duration_s, 1.0) / 1000.0 / (1.0 + 0.08 * max(n_components - 1, 0)), 0.1)
         runtime.ingest(n=n_sig, d=d_sig, w=w_sig, q_s=q_s_sig, p=None)
     h_curve_df = pd.DataFrame([{"time_s": s.t_s, "H": s.h, "k_mix": s.k_mix} for s in runtime.samples])
     h_curve_df["RSD_backcalc"] = (1.0 - h_curve_df["H"]) * 100.0
@@ -986,6 +1003,11 @@ def _run_dry_view(
 
     st.caption(_t("dry.h.desc", "Main quality indicator. Shows how close the batch is to homogeneous state (1.0 means fully homogenized)."))
     st.subheader(_t("dry.h.title", "Degree of homogenization H(t)"))
+    st.caption(
+        f"Complexity factor={complexity_penalty:.2f}; components={n_components}, "
+        f"segregation={seg_mix:.3f}, span={span_mix:.3f}, loading={loading_ratio:.2f}x nominal. "
+        "Higher factor increases homogenization time."
+    )
     st.line_chart(h_curve_df, x="time_s", y="H")
     st.line_chart(
         pd.DataFrame({"time_s": h_curve_df["time_s"], "H_target": [h_cfg.h_target] * len(h_curve_df)}),
@@ -1116,7 +1138,9 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
                     "rsd0_%": round(c.rsd0, 3),
                 }
             )
-        st.dataframe(pd.DataFrame(table_rows), use_container_width=True, height=280)
+        table_df = pd.DataFrame(table_rows)
+        table_df.index = range(1, len(table_df) + 1)
+        st.dataframe(table_df, use_container_width=True, height=280)
 
         with st.expander(_t("material.component_card", "Component card"), expanded=False):
             thresholds = _material_risk_thresholds()
@@ -1281,6 +1305,7 @@ def _render_homogenization_viz(
     tau_s: float,
     model_k: float,
     material_payload: dict[str, Any],
+    mixer_payload: dict[str, Any],
     reaction_enabled: bool,
     reaction_rate: float,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1310,6 +1335,21 @@ def _render_homogenization_viz(
     mixture = material_payload.get("scaled_mixture", {})
     seg_mix = float(mixture.get("segregation_idx_mix", 0.3))
     w_eq_mix = float(mixture.get("w_eq_mix", 0.0)) / 100.0
+    span_mix = float(mixture.get("span_mix", 1.5))
+    n_components = len(points[0].components[0]) if points and points[0].components else 1
+    rho_b_mix = float(mixture.get("rho_b_mix", 1200.0))
+    mixer_mass = float(mixer_payload.get("mixer_loaded_mass_kg", 1000.0))
+    mixer_volume = float(mixer_payload.get("mixer_volume_m3", 2.0))
+    mixer_fill = float(mixer_payload.get("mixer_fill_factor", 0.6))
+    nominal_mass = max(mixer_volume * mixer_fill * max(rho_b_mix, 1e-6), 1e-6)
+    loading_ratio = max(min(mixer_mass / nominal_mass, 2.0), 0.5)
+    complexity_penalty = (
+        1.0
+        + 0.12 * max(n_components - 2, 0)
+        + 0.35 * max(seg_mix - 0.3, 0.0)
+        + 0.08 * max(span_mix - 1.5, 0.0)
+        + 0.25 * max(loading_ratio - 1.0, 0.0)
+    )
 
     series = calc_online_homogenization_series(
         times_s=times,
@@ -1326,7 +1366,7 @@ def _render_homogenization_viz(
     last = series[-1]
 
     h_cfg = HMixConfig(
-        k0=max(model_k * 0.2, 0.001),
+        k0=max(model_k * 0.2 / max(complexity_penalty, 1e-6), 0.001),
         k_n=0.0008,
         k_D=0.1,
         k_w=0.002,
@@ -1338,10 +1378,11 @@ def _render_homogenization_viz(
     runtime = MixQualityRuntime(config=h_cfg)
     runtime.new_batch(batch_id=batch_id)
     for i, p in enumerate(points):
-        n_sig = 400.0 + 50.0 * (i / max(len(points) - 1, 1))
-        d_sig = 1.0 if i > 3 else 0.0
+        mixer_speed_rpm = float(mixer_payload.get("mixer_speed_rpm", 30.0))
+        n_sig = max(mixer_speed_rpm * 12.0, 120.0) + 50.0 * (i / max(len(points) - 1, 1))
+        d_sig = 1.0 if i > int(3 + 0.3 * max(n_components - 1, 0)) else 0.0
         w_sig = p.moisture[-1] * 100.0
-        qs_sig = 0.5 + 0.05 * p.components[-1][key_component_idx]
+        qs_sig = (0.5 + 0.05 * p.components[-1][key_component_idx]) / (1.0 + 0.08 * max(n_components - 1, 0))
         p_sig = 1.0 - 0.4 * min(p.time_s / max(times[-1], 1.0), 1.0)
         runtime.ingest(n=n_sig, d=d_sig, w=w_sig, q_s=qs_sig, p=p_sig)
     h_curve_df = pd.DataFrame([{"time_s": s.t_s, "H": s.h, "k_mix": s.k_mix} for s in runtime.samples])
@@ -1386,6 +1427,11 @@ def _render_homogenization_viz(
     with kpi5:
         st.metric("Confidence", f"{conf_score * 100.0:.1f}%")
     st.markdown("</div>", unsafe_allow_html=True)
+    st.caption(
+        f"Complexity factor={complexity_penalty:.2f}; components={n_components}, "
+        f"segregation={seg_mix:.3f}, span={span_mix:.3f}, loading={loading_ratio:.2f}x nominal. "
+        "Higher factor increases homogenization time."
+    )
 
     online_tab, post_batch_tab, predictive_tab = st.tabs(
         [
@@ -1843,6 +1889,7 @@ def _run_wet_view(
             tau_s=tau_s,
             model_k=cfg.cells / max(cfg.tau_s, 1e-6),
             material_payload=material_payload,
+            mixer_payload=mixer_payload,
             reaction_enabled=reaction_enabled,
             reaction_rate=reaction_rate,
         )
