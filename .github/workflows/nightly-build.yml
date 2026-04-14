@@ -1,0 +1,59 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Install dependencies
+        shell: powershell
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,ui,packaging]"
+
+      - name: Run tests
+        shell: powershell
+        run: python -m pytest -q
+
+      - name: Build unsigned installer
+        if: ${{ secrets.WIN_CODESIGN_PFX_BASE64 == '' || secrets.WIN_CODESIGN_PFX_PASSWORD == '' }}
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1
+
+      - name: Prepare signing certificate
+        if: ${{ secrets.WIN_CODESIGN_PFX_BASE64 != '' && secrets.WIN_CODESIGN_PFX_PASSWORD != '' }}
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path .\secrets | Out-Null
+          [System.IO.File]::WriteAllBytes(".\secrets\codesign.pfx", [Convert]::FromBase64String("${{ secrets.WIN_CODESIGN_PFX_BASE64 }}"))
+
+      - name: Build signed installer
+        if: ${{ secrets.WIN_CODESIGN_PFX_BASE64 != '' && secrets.WIN_CODESIGN_PFX_PASSWORD != '' }}
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1 `
+            -CertFile ".\secrets\codesign.pfx" `
+            -CertPassword "${{ secrets.WIN_CODESIGN_PFX_PASSWORD }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: asutp-mixing-module-windows
+          path: |
+            dist/asutp-mixing-module.exe
+            dist/asutp-mixing-module-setup.exe

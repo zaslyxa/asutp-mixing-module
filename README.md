@@ -53,6 +53,100 @@ The H(t) chart supports online monitoring, historical batch overlay, and predict
 pytest -q
 ```
 
+## Build Windows EXE
+
+1. Install packaging dependencies:
+
+```bash
+pip install -e .[ui,packaging]
+```
+
+2. Build single-file executable (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_exe.ps1 -Clean
+```
+
+3. Result:
+- `dist/asutp-mixing-module.exe`
+
+The EXE starts the Streamlit UI launcher and uses local `config/` and `reports/` folders in the runtime directory.
+
+## Build Windows Installer (.exe setup)
+
+1. Install [Inno Setup 6](https://jrsoftware.org/isinfo.php).
+2. Build installer (includes EXE build by default):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1
+```
+
+Optional (if EXE is already built):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1 -SkipExeBuild
+```
+
+3. Result:
+- `dist/asutp-mixing-module-setup.exe`
+
+Installer includes:
+- app executable,
+- `config/` defaults,
+- `docs/` reference files,
+- start menu shortcut and optional desktop shortcut.
+
+### Installer versioning
+
+- Installer version is auto-read from `pyproject.toml` (`project.version`).
+- Optional manual override:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1 -Version 0.2.0
+```
+
+### Code signing (optional)
+
+If you have a code-signing certificate (`.pfx`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1 `
+  -CertFile "C:\secure\codesign.pfx" `
+  -CertPassword "YOUR_PASSWORD"
+```
+
+Optional parameters:
+- `-SignToolPath` to specify `signtool.exe` explicitly,
+- `-TimestampUrl` to use a custom timestamp server.
+
+The script signs both `dist/asutp-mixing-module.exe` and `dist/asutp-mixing-module-setup.exe`.
+Before signing, the script validates the certificate validity period and fails early if the certificate is expired or not yet valid.
+
+### Silent install
+
+For unattended deployment:
+
+```powershell
+dist\asutp-mixing-module-setup.exe /VERYSILENT /NORESTART /SP- /SUPPRESSMSGBOXES
+```
+
+Optional custom install directory:
+
+```powershell
+dist\asutp-mixing-module-setup.exe /VERYSILENT /DIR="C:\ASUTP\MixingModule"
+```
+
+### CI nightly build template
+
+A ready workflow template is included at:
+- `.github/workflows/nightly-build.yml`
+
+It runs on Windows nightly (and manually), executes tests, builds EXE + installer, and uploads artifacts.
+
+For signed builds in CI, set repository secrets:
+- `WIN_CODESIGN_PFX_BASE64` (base64-encoded `.pfx`),
+- `WIN_CODESIGN_PFX_PASSWORD`.
+
 ## Mathematical basis
 
 The repository now documents the mathematical apparatus from the provided technical specifications:
