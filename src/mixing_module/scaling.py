@@ -47,18 +47,24 @@ def scaling_engine(
         raise ValueError("recipe must contain at least one component")
 
     rho_mix = _weighted(rows, "rho_bulk")
+    rho_true_mix = _weighted(rows, "rho_true")
     cp_mix = _weighted(rows, "cp")
     w0_mix = _weighted(rows, "w_initial")
     span_mix = _weighted(rows, "span")
     angle_mix = _weighted(rows, "angle_repose")
+    friction_mix = _weighted(rows, "friction_steel")
     hausner_mix = _weighted(rows, "hausner_ratio")
     segregation_mix = _weighted(rows, "segregation_idx")
     w_eq_mix = _weighted(rows, "w_equilibrium")
+    rsd0_mix = _weighted(rows, "rsd0")
     w_crit_mix = min(r.component.w_crit for r in rows)
 
-    k = k_ref * (rho_ref / rho_mix) ** 0.3 * _hausner_factor(hausner_mix)
+    density_ratio = max(rho_true_mix / max(rho_mix, 1e-6), 1.0)
+    friction_factor = max(0.6, 1.1 - 0.5 * max(friction_mix - 0.35, 0.0))
+    rsd0_factor = max(0.7, min(1.3, 100.0 / max(rsd0_mix, 1e-6)))
+    k = k_ref * (rho_ref / rho_mix) ** 0.3 * _hausner_factor(hausner_mix) * friction_factor * rsd0_factor
     pe = pe_ref * (1.0 / max(span_mix, 1e-6)) ** 0.5 * (angle_ref / max(angle_mix, 1e-6))
-    ka = ka0 * (2.718281828459045 ** (beta * (w0_mix / max(w_crit_mix, 1e-6))))
+    ka = ka0 * (2.718281828459045 ** (beta * (w0_mix / max(w_crit_mix, 1e-6)))) * max(0.8, min(1.2, density_ratio ** 0.1))
     kh = kh0 * (max(rotor_speed, 1e-6) / max(rotor_speed_ref, 1e-6)) ** 0.5 * (cp_mix / cp_ref) ** (-0.4)
     b = q_l_target / max(cell_volume_m3 * rho_mix, 1e-9)
 
@@ -77,8 +83,11 @@ def scaling_engine(
             "hausner_mix": hausner_mix,
             "span_mix": span_mix,
             "angle_repose_mix": angle_mix,
+            "rho_true_mix": rho_true_mix,
+            "friction_steel_mix": friction_mix,
             "segregation_idx_mix": segregation_mix,
             "w_eq_mix": w_eq_mix,
+            "rsd0_mix": rsd0_mix,
         },
         "model": {
             "k": k,

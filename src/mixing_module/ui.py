@@ -175,6 +175,259 @@ def _severity(level: str, message: str) -> None:
         st.success(message)
 
 
+def _t(key: str, default: str) -> str:
+    lang = st.session_state.get("ui_language", "Русский")
+    translations: dict[str, dict[str, str]] = {
+        "English": {
+            "app.title": "ASUTP Mixing Module - Recipe Driven Simulation",
+            "app.caption": "Select recipe -> model is chosen automatically -> provide process parameters",
+            "sidebar.language": "Language",
+            "sidebar.recipe_storage": "Recipe storage",
+            "sidebar.recipe_file": "Recipe file (.json/.yaml)",
+            "sidebar.load_recipe": "Load recipe from file",
+            "sidebar.save_recipe": "Save current recipe to file",
+            "sidebar.recipe": "Recipe",
+            "sidebar.model_by_recipe": "Model selection by recipe",
+            "sidebar.layout": "Layout mode",
+            "sidebar.page_layout": "Page layout",
+            "sidebar.shared": "Shared simulation parameters",
+            "sidebar.save_revision_snapshot": "Save revision snapshot",
+            "sidebar.save_full_revision": "Save full recipe revision",
+            "sidebar.best_templates": "Best-known templates",
+            "sidebar.recipe_history": "Recipe revision history",
+            "sidebar.template": "Template",
+            "sidebar.apply_template": "Apply template",
+            "sidebar.no_revisions": "No revisions yet.",
+            "sidebar.revision": "Revision",
+            "sidebar.load_revision": "Load revision",
+            "sidebar.diff_with_current": "Diff with current",
+            "sidebar.generate_changelog": "Generate changelog",
+            "layout.desktop": "Desktop (2:3)",
+            "layout.balanced": "Balanced (1:1)",
+            "layout.focus": "Focus charts",
+            "layout.caption.desktop": "Configuration panel (~40% width)",
+            "layout.caption.balanced": "Configuration panel (~50% width)",
+            "layout.caption.focus": "Compact configuration panel (~20% width)",
+            "layout.readable": "Readable mode (stacked panels)",
+            "onboarding.title": "Operator quick start",
+            "onboarding.dismiss": "Dismiss quick start",
+            "tabs.process": "Process",
+            "tabs.hviz": "HomogenizationViz",
+            "tabs.integration": "Integration",
+            "tabs.online": "Online",
+            "tabs.post_batch": "Post-batch",
+            "tabs.predictive": "Predictive",
+            "tabs.contracts": "Contracts",
+            "tabs.export": "Export",
+            "sidebar.tab.main": "Main",
+            "sidebar.tab.display": "Display settings",
+            "mixer.title": "Mixer parameters",
+            "mixer.type": "Mixer type",
+            "mixer.type.plough": "Plough mixer",
+            "mixer.volume": "Working chamber volume, m3",
+            "mixer.fill": "Fill factor",
+            "mixer.mass": "Loaded mass, kg",
+            "mixer.speed": "Shaft speed, rpm",
+            "mixer.power": "Motor power, kW",
+            "material.title": "MaterialConfig",
+            "material.data_source": "Data source",
+            "material.db_path": "Material DB path",
+            "material.catalog": "Material catalog",
+            "material.search": "Search material",
+            "material.tags": "Tags",
+            "material.recipe_rows": "Recipe rows",
+            "material.rows": "Material rows",
+            "material.selected_table": "Selected components and characteristics",
+            "material.auto_scaling": "Auto-scaling",
+            "material.use_scaling": "Use auto scaling from material properties",
+            "material.mix_props": "Mixture properties",
+            "material.component_card": "Component card",
+            "threshold.editor": "Risk thresholds editor",
+            "threshold.save": "Save thresholds",
+            "dry.h.title": "Degree of homogenization H(t)",
+            "dry.h.desc": "Main quality indicator. Shows how close the batch is to homogeneous state (1.0 means fully homogenized).",
+            "dry.adv.title": "Advanced diagnostics",
+            "dry.adv.select": "Select diagnostic graphs",
+            "dry.graph.rsd": "RSD(t)",
+            "dry.graph.conc": "Concentration dynamics by cell",
+            "dry.graph.temp": "Temperature dynamics by cell",
+            "dry.graph.rsd.desc": "Relative standard deviation back-calculated from H(t). Used for quality thresholds and acceptance criteria.",
+            "dry.graph.conc.desc": "Concentration propagation through CSTR cascade cells. Useful for diagnosing transport and lag.",
+            "dry.graph.temp.desc": "Thermal channel response in cells. Helps estimate heat exchange and thermal stabilization.",
+            "dry.rsd.title": "RSD(t) from homogenization curve",
+            "dry.conc.title": "Concentration dynamics by cell",
+            "dry.temp.title": "Temperature dynamics by cell",
+            "display.reset": "Reset display to recommended",
+            "display.reset.done": "Display settings reset to recommended.",
+        },
+        "Русский": {
+            "app.title": "ASUTP Mixing Module - Рецептурное моделирование",
+            "app.caption": "Выберите рецепт -> модель выберется автоматически -> задайте параметры процесса",
+            "sidebar.language": "Язык",
+            "sidebar.recipe_storage": "Хранилище рецептов",
+            "sidebar.recipe_file": "Файл рецепта (.json/.yaml)",
+            "sidebar.load_recipe": "Загрузить рецепт из файла",
+            "sidebar.save_recipe": "Сохранить текущий рецепт в файл",
+            "sidebar.recipe": "Рецепт",
+            "sidebar.model_by_recipe": "Выбор модели по рецепту",
+            "sidebar.layout": "Режим компоновки",
+            "sidebar.page_layout": "Макет страницы",
+            "sidebar.shared": "Общие параметры симуляции",
+            "sidebar.save_revision_snapshot": "Сохранить снимок ревизии",
+            "sidebar.save_full_revision": "Сохранить полную ревизию рецепта",
+            "sidebar.best_templates": "Лучшие шаблоны",
+            "sidebar.recipe_history": "История ревизий рецепта",
+            "sidebar.template": "Шаблон",
+            "sidebar.apply_template": "Применить шаблон",
+            "sidebar.no_revisions": "Ревизий пока нет.",
+            "sidebar.revision": "Ревизия",
+            "sidebar.load_revision": "Загрузить ревизию",
+            "sidebar.diff_with_current": "Сравнить с текущим",
+            "sidebar.generate_changelog": "Сгенерировать changelog",
+            "layout.desktop": "Рабочий стол (2:3)",
+            "layout.balanced": "Баланс (1:1)",
+            "layout.focus": "Фокус на графиках",
+            "layout.caption.desktop": "Панель конфигурации (~40% ширины)",
+            "layout.caption.balanced": "Панель конфигурации (~50% ширины)",
+            "layout.caption.focus": "Компактная панель конфигурации (~20% ширины)",
+            "layout.readable": "Режим читаемости (панели друг под другом)",
+            "onboarding.title": "Быстрый старт оператора",
+            "onboarding.dismiss": "Скрыть быстрый старт",
+            "tabs.process": "Процесс",
+            "tabs.hviz": "Визуализация гомогенизации",
+            "tabs.integration": "Интеграция",
+            "tabs.online": "Онлайн",
+            "tabs.post_batch": "После партии",
+            "tabs.predictive": "Прогноз",
+            "tabs.contracts": "Контракты",
+            "tabs.export": "Экспорт",
+            "sidebar.tab.main": "Основное",
+            "sidebar.tab.display": "Настройки отображения",
+            "mixer.title": "Параметры смесителя",
+            "mixer.type": "Тип смесителя",
+            "mixer.type.plough": "Плужный смеситель",
+            "mixer.volume": "Объём рабочей камеры, м3",
+            "mixer.fill": "Коэффициент заполнения",
+            "mixer.mass": "Загружаемая масса, кг",
+            "mixer.speed": "Частота вращения вала, об/мин",
+            "mixer.power": "Мощность двигателя, кВт",
+            "material.title": "MaterialConfig",
+            "material.data_source": "Источник данных",
+            "material.db_path": "Путь к БД материалов",
+            "material.catalog": "Каталог материалов",
+            "material.search": "Поиск материала",
+            "material.tags": "Теги",
+            "material.recipe_rows": "Строки рецепта",
+            "material.rows": "Количество строк материалов",
+            "material.selected_table": "Выбранные компоненты и характеристики",
+            "material.auto_scaling": "Автомасштабирование",
+            "material.use_scaling": "Использовать автомасштабирование по свойствам материалов",
+            "material.mix_props": "Свойства смеси",
+            "material.component_card": "Карточка компонента",
+            "threshold.editor": "Редактор порогов риска",
+            "threshold.save": "Сохранить пороги",
+            "dry.h.title": "Степень гомогенизации H(t)",
+            "dry.h.desc": "Главный индикатор качества. Показывает, насколько смесь близка к полностью однородному состоянию (1.0 = полностью гомогенизирована).",
+            "dry.adv.title": "Расширенная диагностика",
+            "dry.adv.select": "Выберите диагностические графики",
+            "dry.graph.rsd": "RSD(t)",
+            "dry.graph.conc": "Динамика концентрации по ячейкам",
+            "dry.graph.temp": "Динамика температуры по ячейкам",
+            "dry.graph.rsd.desc": "Относительное стандартное отклонение, восстановленное из H(t). Используется для порогов качества и критериев приемки.",
+            "dry.graph.conc.desc": "Распространение концентрации по ячейкам CSTR-каскада. Полезно для диагностики переноса и запаздывания.",
+            "dry.graph.temp.desc": "Тепловой отклик по ячейкам. Помогает оценить теплообмен и тепловую стабилизацию.",
+            "dry.rsd.title": "RSD(t) по кривой гомогенизации",
+            "dry.conc.title": "Динамика концентрации по ячейкам",
+            "dry.temp.title": "Динамика температуры по ячейкам",
+            "display.reset": "Сбросить отображение к рекомендуемому",
+            "display.reset.done": "Параметры отображения сброшены к рекомендуемым.",
+        },
+        "中文": {
+            "app.title": "ASUTP 混合模块 - 配方驱动仿真",
+            "app.caption": "选择配方 -> 自动选择模型 -> 填写工艺参数",
+            "sidebar.language": "语言",
+            "sidebar.recipe_storage": "配方存储",
+            "sidebar.recipe_file": "配方文件 (.json/.yaml)",
+            "sidebar.load_recipe": "从文件加载配方",
+            "sidebar.save_recipe": "将当前配方保存到文件",
+            "sidebar.recipe": "配方",
+            "sidebar.model_by_recipe": "按配方选择模型",
+            "sidebar.layout": "布局模式",
+            "sidebar.page_layout": "页面布局",
+            "sidebar.shared": "共享仿真参数",
+            "sidebar.save_revision_snapshot": "保存修订快照",
+            "sidebar.save_full_revision": "保存完整配方修订",
+            "sidebar.best_templates": "最佳模板",
+            "sidebar.recipe_history": "配方修订历史",
+            "sidebar.template": "模板",
+            "sidebar.apply_template": "应用模板",
+            "sidebar.no_revisions": "暂无修订记录。",
+            "sidebar.revision": "修订",
+            "sidebar.load_revision": "加载修订",
+            "sidebar.diff_with_current": "与当前配置比较",
+            "sidebar.generate_changelog": "生成变更日志",
+            "layout.desktop": "桌面 (2:3)",
+            "layout.balanced": "均衡 (1:1)",
+            "layout.focus": "图表优先",
+            "layout.caption.desktop": "配置面板（约 40% 宽度）",
+            "layout.caption.balanced": "配置面板（约 50% 宽度）",
+            "layout.caption.focus": "紧凑配置面板（约 20% 宽度）",
+            "layout.readable": "可读模式（上下堆叠）",
+            "onboarding.title": "操作员快速入门",
+            "onboarding.dismiss": "关闭快速入门",
+            "tabs.process": "过程",
+            "tabs.hviz": "均匀化可视化",
+            "tabs.integration": "集成",
+            "tabs.online": "在线",
+            "tabs.post_batch": "批后分析",
+            "tabs.predictive": "预测",
+            "tabs.contracts": "协议",
+            "tabs.export": "导出",
+            "sidebar.tab.main": "主要设置",
+            "sidebar.tab.display": "显示设置",
+            "mixer.title": "混合机参数",
+            "mixer.type": "混合机类型",
+            "mixer.type.plough": "犁刀混合机",
+            "mixer.volume": "工作腔体积, m3",
+            "mixer.fill": "填充系数",
+            "mixer.mass": "装料质量, kg",
+            "mixer.speed": "主轴转速, rpm",
+            "mixer.power": "电机功率, kW",
+            "material.title": "材料配置",
+            "material.data_source": "数据源",
+            "material.db_path": "材料数据库路径",
+            "material.catalog": "材料目录",
+            "material.search": "搜索材料",
+            "material.tags": "标签",
+            "material.recipe_rows": "配方行",
+            "material.rows": "材料行数",
+            "material.selected_table": "已选组件与特性",
+            "material.auto_scaling": "自动缩放",
+            "material.use_scaling": "根据材料属性启用自动缩放",
+            "material.mix_props": "混合物属性",
+            "material.component_card": "组件卡片",
+            "threshold.editor": "风险阈值编辑器",
+            "threshold.save": "保存阈值",
+            "dry.h.title": "均匀化程度 H(t)",
+            "dry.h.desc": "主要质量指标。表示批次接近均匀状态的程度（1.0 表示完全均匀）。",
+            "dry.adv.title": "高级诊断",
+            "dry.adv.select": "选择诊断图表",
+            "dry.graph.rsd": "RSD(t)",
+            "dry.graph.conc": "各单元浓度动态",
+            "dry.graph.temp": "各单元温度动态",
+            "dry.graph.rsd.desc": "由 H(t) 反算的相对标准偏差，用于质量阈值与验收判据。",
+            "dry.graph.conc.desc": "CSTR 级联单元中的浓度传播，用于诊断传质与滞后。",
+            "dry.graph.temp.desc": "各单元热通道响应，用于评估换热与热稳定。",
+            "dry.rsd.title": "由均匀化曲线得到的 RSD(t)",
+            "dry.conc.title": "各单元浓度动态",
+            "dry.temp.title": "各单元温度动态",
+            "display.reset": "重置为推荐显示",
+            "display.reset.done": "显示设置已重置为推荐值。",
+        },
+    }
+    return translations.get(lang, {}).get(key, default)
+
+
 def _best_known_templates() -> dict[str, dict[str, Any]]:
     return {
         "Fast dry blending": {
@@ -192,21 +445,67 @@ def _best_known_templates() -> dict[str, dict[str, Any]]:
                 "wet": {"w_in": 0.12, "w0": 0.06, "q_liquid": 0.20, "b_q": 0.05, "ka": 0.025, "kb": 0.0012, "w_star": 0.15},
             },
         },
+        "Plough dry mortar (spec)": {
+            "target_rsd": 5.0,
+            "payload": {
+                "model": "dry-cascade",
+                "shared": {"duration_s": 180.0, "dt_s": 1.0, "cells": 5, "tau_s": 45.0, "kh": 0.025, "t_in": 25.0, "t_wall": 30.0},
+                "material_config": {
+                    "use_material_scaling": True,
+                    "rotor_speed": 1.0,
+                    "cell_volume_m3": 2.0,
+                    "q_l_target": 0.0,
+                    "rows": [
+                        {"code": "CEM_I_425N", "mass_kg": 288.0},
+                        {"code": "SAND_063_125", "mass_kg": 1080.0},
+                        {"code": "LIME_HYDR", "mass_kg": 43.2},
+                        {"code": "SP1_SUPER", "mass_kg": 14.4},
+                        {"code": "SILOX_HYDRO", "mass_kg": 14.4},
+                    ],
+                },
+                "mixer": {
+                    "mixer_type": "plough",
+                    "mixer_volume_m3": 2.0,
+                    "mixer_fill_factor": 0.6,
+                    "mixer_loaded_mass_kg": 1440.0,
+                    "mixer_speed_rpm": 30.0,
+                    "mixer_power_kw": 22.0,
+                },
+            },
+        },
     }
 
 
 def _render_onboarding() -> None:
     if st.session_state.get("onboarding_dismissed", False):
         return
-    with st.expander("Operator quick start", expanded=True):
-        st.markdown(
-            "- 1) Select recipe and page layout in sidebar.\n"
-            "- 2) Configure materials in left panel and validate risk tags.\n"
-            "- 3) Run process in right panel, then check HomogenizationViz KPIs.\n"
-            "- 4) Use Integration tab for OPC/MQTT payload validation and dry-run publish.\n"
-            "- 5) Save recipe revision snapshots before applying production changes."
-        )
-        if st.button("Dismiss quick start", key="dismiss_onboarding_btn"):
+    with st.expander(_t("onboarding.title", "Operator quick start"), expanded=True):
+        lang = st.session_state.get("ui_language", "Русский")
+        if lang == "Русский":
+            st.markdown(
+                "- 1) Выберите рецепт и режим компоновки в боковой панели.\n"
+                "- 2) Настройте материалы слева и проверьте risk-теги.\n"
+                "- 3) Запустите процесс справа и проверьте KPI в HomogenizationViz.\n"
+                "- 4) Используйте вкладку Integration для проверки OPC/MQTT и dry-run публикации.\n"
+                "- 5) Сохраняйте ревизии рецептов перед промышленными изменениями."
+            )
+        elif lang == "中文":
+            st.markdown(
+                "- 1) 在侧边栏选择配方与布局模式。\n"
+                "- 2) 在左侧配置物料并检查风险标签。\n"
+                "- 3) 在右侧运行过程并查看 HomogenizationViz KPI。\n"
+                "- 4) 在 Integration 页签校验 OPC/MQTT 并进行 dry-run 发布。\n"
+                "- 5) 在应用生产变更前保存配方修订。"
+            )
+        else:
+            st.markdown(
+                "- 1) Select recipe and page layout in sidebar.\n"
+                "- 2) Configure materials in left panel and validate risk tags.\n"
+                "- 3) Run process in right panel, then check HomogenizationViz KPIs.\n"
+                "- 4) Use Integration tab for OPC/MQTT payload validation and dry-run publish.\n"
+                "- 5) Save recipe revision snapshots before applying production changes."
+            )
+        if st.button(_t("onboarding.dismiss", "Dismiss quick start"), key="dismiss_onboarding_btn"):
             st.session_state["onboarding_dismissed"] = True
             st.rerun()
 
@@ -339,7 +638,7 @@ def _save_risk_thresholds(
 
 
 def _render_threshold_editor_sidebar() -> None:
-    with st.expander("Risk thresholds editor", expanded=False):
+    with st.expander(_t("threshold.editor", "Risk thresholds editor"), expanded=False):
         material_cfg = _material_risk_thresholds()
         status_cfg = _status_thresholds()
         st.caption("Adjust thresholds and save to config/viz_params.yaml")
@@ -450,7 +749,7 @@ def _render_threshold_editor_sidebar() -> None:
                 key="thr_reaction_rate_warn",
             )
 
-        if st.button("Save thresholds", key="save_thresholds_btn"):
+        if st.button(_t("threshold.save", "Save thresholds"), key="save_thresholds_btn"):
             if hausner_warn < hausner_ok or span_warn < span_ok or seg_warn < seg_ok or angle_warn < angle_ok:
                 st.error("Warning max must be >= OK max for all material thresholds.")
             else:
@@ -518,7 +817,15 @@ def _ensure_default_state() -> None:
         "mixer_id": "mx-01",
         "viz_mode": "online",
         "layout_mode": "Desktop (2:3)",
+        "single_column_mode": True,
+        "ui_language": "Русский",
         "onboarding_dismissed": False,
+        "mixer_type": "plough",
+        "mixer_volume_m3": 2.0,
+        "mixer_fill_factor": 0.6,
+        "mixer_loaded_mass_kg": 1440.0,
+        "mixer_speed_rpm": 30.0,
+        "mixer_power_kw": 22.0,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -601,6 +908,18 @@ def _apply_loaded_recipe(payload: dict[str, Any]) -> None:
         ):
             if key in viz:
                 st.session_state[key] = viz[key]
+    mixer = payload.get("mixer", {})
+    if mixer:
+        for key in (
+            "mixer_type",
+            "mixer_volume_m3",
+            "mixer_fill_factor",
+            "mixer_loaded_mass_kg",
+            "mixer_speed_rpm",
+            "mixer_power_kw",
+        ):
+            if key in mixer:
+                st.session_state[key] = mixer[key]
 
 
 def _run_dry_view(
@@ -613,6 +932,7 @@ def _run_dry_view(
     t_wall: float,
     auto_params: dict[str, float],
     material_payload: dict[str, Any],
+    mixer_payload: dict[str, Any],
 ) -> dict[str, Any]:
     if auto_params:
         tau_s = float(auto_params.get("tau_s", tau_s))
@@ -631,14 +951,66 @@ def _run_dry_view(
     points = run_dry_cascade(cfg)
     c_df = _build_dry_concentration_series(points)
     t_df = _build_temperature_series(points)
+    model_k = cfg.cells / max(cfg.tau_s, 1e-6)
+    h_cfg = HMixConfig(
+        k0=max(model_k * 0.2, 0.001),
+        k_n=0.0008,
+        k_D=0.1,
+        k_w=0.002,
+        k_Q=0.0005,
+        q_s0=0.5,
+        h_target=0.95,
+        ts_s=max(dt_s, 1.0),
+    )
+    runtime = MixQualityRuntime(config=h_cfg)
+    runtime.new_batch("dry-graph-view")
+    mixer_speed_rpm = float(mixer_payload.get("mixer_speed_rpm", 30.0))
+    mixer_mass = float(mixer_payload.get("mixer_loaded_mass_kg", 1000.0))
+    for i, p in enumerate(points):
+        n_sig = mixer_speed_rpm * 12.0
+        d_sig = 1.0 if i > 3 else 0.0
+        w_sig = 0.2
+        q_s_sig = max(mixer_mass / max(duration_s, 1.0) / 1000.0, 0.1)
+        runtime.ingest(n=n_sig, d=d_sig, w=w_sig, q_s=q_s_sig, p=None)
+    h_curve_df = pd.DataFrame([{"time_s": s.t_s, "H": s.h, "k_mix": s.k_mix} for s in runtime.samples])
+    h_curve_df["RSD_backcalc"] = (1.0 - h_curve_df["H"]) * 100.0
 
-    left, right = st.columns(2)
-    with left:
-        st.subheader("Concentration dynamics by cell")
-        st.line_chart(c_df, x="time_s", y="concentration", color="cell")
-    with right:
-        st.subheader("Temperature dynamics by cell")
-        st.line_chart(t_df, x="time_s", y="temperature_c", color="cell")
+    graph_rsd = _t("dry.graph.rsd", "RSD(t)")
+    graph_conc = _t("dry.graph.conc", "Concentration dynamics by cell")
+    graph_temp = _t("dry.graph.temp", "Temperature dynamics by cell")
+    graph_descriptions = {
+        graph_rsd: _t("dry.graph.rsd.desc", "Relative standard deviation back-calculated from H(t). Used for quality thresholds and acceptance criteria."),
+        graph_conc: _t("dry.graph.conc.desc", "Concentration propagation through CSTR cascade cells. Useful for diagnosing transport and lag."),
+        graph_temp: _t("dry.graph.temp.desc", "Thermal channel response in cells. Helps estimate heat exchange and thermal stabilization."),
+    }
+
+    st.caption(_t("dry.h.desc", "Main quality indicator. Shows how close the batch is to homogeneous state (1.0 means fully homogenized)."))
+    st.subheader(_t("dry.h.title", "Degree of homogenization H(t)"))
+    st.line_chart(h_curve_df, x="time_s", y="H")
+    st.line_chart(
+        pd.DataFrame({"time_s": h_curve_df["time_s"], "H_target": [h_cfg.h_target] * len(h_curve_df)}),
+        x="time_s",
+        y="H_target",
+    )
+
+    with st.expander(_t("dry.adv.title", "Advanced diagnostics"), expanded=False):
+        selected_graphs = st.multiselect(
+            _t("dry.adv.select", "Select diagnostic graphs"),
+            options=list(graph_descriptions.keys()),
+            default=[],
+            key="dry_graph_selector",
+        )
+        for graph_name in selected_graphs:
+            st.caption(f"{graph_name}: {graph_descriptions[graph_name]}")
+            if graph_name == graph_rsd:
+                st.subheader(_t("dry.rsd.title", "RSD(t) from homogenization curve"))
+                st.line_chart(h_curve_df, x="time_s", y="RSD_backcalc")
+            elif graph_name == graph_conc:
+                st.subheader(_t("dry.conc.title", "Concentration dynamics by cell"))
+                st.line_chart(c_df, x="time_s", y="concentration", color="cell")
+            elif graph_name == graph_temp:
+                st.subheader(_t("dry.temp.title", "Temperature dynamics by cell"))
+                st.line_chart(t_df, x="time_s", y="temperature_c", color="cell")
 
     nearest = points[-1]
     st.info(
@@ -657,19 +1029,20 @@ def _run_dry_view(
             "t_wall": t_wall,
         },
         "material_config": material_payload,
+        "mixer": mixer_payload,
     }
 
 
 def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any]]:
-    st.subheader("MaterialConfig")
-    with st.expander("Data source", expanded=True):
-        db_path = st.text_input("Material DB path", key="material_db_path")
+    st.subheader(_t("material.title", "MaterialConfig"))
+    with st.expander(_t("material.data_source", "Data source"), expanded=True):
+        db_path = st.text_input(_t("material.db_path", "Material DB path"), key="material_db_path")
     init_material_db(db_path)
     available = list_components(db_path)
-    with st.expander("Material catalog", expanded=False):
-        search_text = st.text_input("Search material", key="material_search_text")
+    with st.expander(_t("material.catalog", "Material catalog"), expanded=False):
+        search_text = st.text_input(_t("material.search", "Search material"), key="material_search_text")
         tags = sorted({c.type for c in available})
-        selected_tags = st.multiselect("Tags", options=tags, default=tags, key="material_search_tags")
+        selected_tags = st.multiselect(_t("material.tags", "Tags"), options=tags, default=tags, key="material_search_tags")
         filtered = [
             c
             for c in available
@@ -688,9 +1061,9 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
     name_to_code = {f"{c.name} ({c.code})": c.code for c in available}
 
     recipe_rows: list[RecipeRow] = []
-    with st.expander("Recipe rows", expanded=True):
+    with st.expander(_t("material.recipe_rows", "Recipe rows"), expanded=True):
         st.caption("Select components from database and set masses for scaling")
-        mat_count = st.slider("Material rows", 1, 8, 3, 1, key="material_row_count")
+        mat_count = st.slider(_t("material.rows", "Material rows"), 1, 8, 3, 1, key="material_row_count")
         for i in range(mat_count):
             col_l, col_r = st.columns([2, 1])
             with col_l:
@@ -715,7 +1088,7 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
                 recipe_rows.append(RecipeRow(component=get_component_by_code(code, db_path), mass_kg=mass))
 
     if recipe_rows:
-        st.markdown("**Selected components and characteristics**")
+        st.markdown(f"**{_t('material.selected_table', 'Selected components and characteristics')}**")
         total_mass = sum(r.mass_kg for r in recipe_rows)
         table_rows: list[dict[str, float | str]] = []
         for r in recipe_rows:
@@ -731,18 +1104,21 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
                     "d50_um": round(c.d50, 3),
                     "span": round(c.span, 3),
                     "rho_bulk": round(c.rho_bulk, 3),
+                    "rho_true": round(c.rho_true, 3),
                     "hausner": round(c.hausner_ratio, 3),
                     "w_initial_%": round(c.w_initial, 3),
                     "w_crit_%": round(c.w_crit, 3),
                     "w_eq_%": round(c.w_equilibrium, 3),
                     "cp_JkgK": round(c.cp, 3),
                     "angle_repose_deg": round(c.angle_repose, 3),
+                    "friction_steel": round(c.friction_steel, 3),
                     "segregation_idx": round(c.segregation_idx, 3),
+                    "rsd0_%": round(c.rsd0, 3),
                 }
             )
         st.dataframe(pd.DataFrame(table_rows), use_container_width=True, height=280)
 
-        with st.expander("Component card", expanded=False):
+        with st.expander(_t("material.component_card", "Component card"), expanded=False):
             thresholds = _material_risk_thresholds()
             card_options = {f"{r.component.name} ({r.component.code})": r for r in recipe_rows}
             selected_name = st.selectbox("Select component", options=list(card_options.keys()), key="material_card_selected")
@@ -812,6 +1188,24 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
                     moisture_level,
                     f"Warning if w_initial > {moisture_warn_fraction:.2f} * w_crit, alarm if w_initial > w_crit.",
                 ),
+                (
+                    "True density, kg/m3",
+                    f"{component.rho_true:.0f}",
+                    "ok",
+                    "Material true density used in scaling and packing behavior estimates.",
+                ),
+                (
+                    "Friction steel",
+                    f"{component.friction_steel:.2f}",
+                    "ok" if component.friction_steel <= 0.5 else "warn",
+                    "Higher friction usually reduces convective circulation rate.",
+                ),
+                (
+                    "RSD0, %",
+                    f"{component.rsd0:.1f}",
+                    "ok" if component.rsd0 <= 110 else "warn",
+                    "Initial segregation coefficient for quality initialization.",
+                ),
             ]:
                 c_metric, c_tag = st.columns([4, 1])
                 with c_metric:
@@ -819,8 +1213,8 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
                 with c_tag:
                     st.markdown(_risk_tag(level), unsafe_allow_html=True)
 
-    with st.expander("Auto-scaling", expanded=True):
-        use_scaling = st.checkbox("Use auto scaling from material properties", key="use_material_scaling")
+    with st.expander(_t("material.auto_scaling", "Auto-scaling"), expanded=True):
+        use_scaling = st.checkbox(_t("material.use_scaling", "Use auto scaling from material properties"), key="use_material_scaling")
         rotor_speed = st.number_input("Rotor speed factor", min_value=0.1, max_value=10.0, step=0.1, key="rotor_speed")
         cell_volume_m3 = st.number_input("Cell volume, m3", min_value=0.001, max_value=20.0, step=0.1, key="cell_volume_m3")
         q_l_target = st.number_input("Target liquid flow qL", min_value=0.0, max_value=5.0, step=0.05, key="q_l_target")
@@ -837,7 +1231,7 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
     )
     mixture = scaled["mixture"]
     model = scaled["model"]
-    with st.expander("Mixture properties", expanded=True):
+    with st.expander(_t("material.mix_props", "Mixture properties"), expanded=True):
         st.markdown("**Mixture effective properties**")
         st.write(
             {
@@ -846,6 +1240,9 @@ def _render_material_config(cells: int) -> tuple[dict[str, float], dict[str, Any
                 "w0_mix": round(mixture["w0_mix"], 3),
                 "w_crit_mix": round(mixture["w_crit_mix"], 3),
                 "hausner_mix": round(mixture["hausner_mix"], 3),
+                "rho_true_mix": round(mixture["rho_true_mix"], 3),
+                "friction_steel_mix": round(mixture["friction_steel_mix"], 3),
+                "rsd0_mix": round(mixture["rsd0_mix"], 3),
             }
         )
         if scaled["warnings"]:
@@ -887,7 +1284,7 @@ def _render_homogenization_viz(
     reaction_enabled: bool,
     reaction_rate: float,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    st.subheader("HomogenizationViz - Mixing Quality")
+    st.subheader(f"{_t('tabs.hviz', 'HomogenizationViz')} - Mixing Quality")
     status_cfg = _status_thresholds()
 
     with st.expander("Viz parameters", expanded=True):
@@ -990,7 +1387,13 @@ def _render_homogenization_viz(
         st.metric("Confidence", f"{conf_score * 100.0:.1f}%")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    online_tab, post_batch_tab, predictive_tab = st.tabs(["Online", "Post-batch", "Predictive"])
+    online_tab, post_batch_tab, predictive_tab = st.tabs(
+        [
+            _t("tabs.online", "Online"),
+            _t("tabs.post_batch", "Post-batch"),
+            _t("tabs.predictive", "Predictive"),
+        ]
+    )
 
     with online_tab:
         st.markdown("**Main chart: H(t)**")
@@ -1157,7 +1560,7 @@ def _render_homogenization_viz(
 
 
 def _render_integration_tab(payload: dict[str, Any]) -> dict[str, Any]:
-    st.subheader("Integration")
+    st.subheader(_t("tabs.integration", "Integration"))
     alarm_threshold = float(payload.get("alarm_rsd_percent", 8.0))
     schema_version = st.text_input("Payload schema version", value="1.0.0", key="schema_version")
     opc_payload = build_opc_payload(
@@ -1183,7 +1586,7 @@ def _render_integration_tab(payload: dict[str, Any]) -> dict[str, Any]:
         confidence=float(payload.get("confidence", 0.0)),
         opc_payload=opc_payload,
     )
-    contracts_tab, export_tab = st.tabs(["Contracts", "Export"])
+    contracts_tab, export_tab = st.tabs([_t("tabs.contracts", "Contracts"), _t("tabs.export", "Export")])
     with contracts_tab:
         st.markdown("**OPC UA payload preview**")
         st.json(opc_payload)
@@ -1259,6 +1662,7 @@ def _run_wet_view(
     t_wall: float,
     auto_params: dict[str, float],
     material_payload: dict[str, Any],
+    mixer_payload: dict[str, Any],
 ) -> dict[str, Any]:
     if auto_params:
         tau_s = float(auto_params.get("tau_s", tau_s))
@@ -1406,7 +1810,9 @@ def _run_wet_view(
 
     viz_payload: dict[str, Any] = {}
     integration_meta: dict[str, Any] = {}
-    process_tab, quality_tab, integration_tab = st.tabs(["Process", "HomogenizationViz", "Integration"])
+    process_tab, quality_tab, integration_tab = st.tabs(
+        [_t("tabs.process", "Process"), _t("tabs.hviz", "HomogenizationViz"), _t("tabs.integration", "Integration")]
+    )
     with process_tab:
         left, right = st.columns(2)
         with left:
@@ -1480,15 +1886,16 @@ def _run_wet_view(
         },
         "material_config": material_payload,
         "viz_config": viz_payload,
+        "mixer": mixer_payload,
     }
 
 
 def run_app() -> None:
     st.set_page_config(page_title="ASUTP Mixing Visualizer", layout="wide")
     _inject_ui_css()
-    st.title("ASUTP Mixing Module - Recipe Driven Simulation")
-    st.caption("Select recipe -> model is chosen automatically -> provide process parameters")
     _ensure_default_state()
+    st.title(_t("app.title", "ASUTP Mixing Module - Recipe Driven Simulation"))
+    st.caption(_t("app.caption", "Select recipe -> model is chosen automatically -> provide process parameters"))
     _render_onboarding()
     viz_meta = _load_viz_params().get("_meta", {})
     if viz_meta.get("migrated"):
@@ -1498,108 +1905,153 @@ def run_app() -> None:
             st.error(f"viz_params validation: {err}")
 
     with st.sidebar:
-        st.subheader("Recipe storage")
-        recipe_file_path = st.text_input("Recipe file (.json/.yaml)", key="recipe_file_path")
-        if st.button("Load recipe from file"):
-            try:
-                payload = load_recipe(recipe_file_path)
-                _apply_loaded_recipe(payload)
-                st.success("Recipe loaded")
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Failed to load recipe: {exc}")
-        if st.button("Save revision snapshot", key="save_recipe_revision_btn"):
-            snapshot_payload = {
-                "model": "wet-cascade" if st.session_state.get("selected_recipe_name") == "Wet mixing" else "dry-cascade",
-                "shared": {
-                    "duration_s": st.session_state["duration_s"],
-                    "dt_s": st.session_state["dt_s"],
-                    "cells": st.session_state["cells"],
-                    "tau_s": st.session_state["tau_s"],
-                    "kh": st.session_state["kh"],
-                    "t_in": st.session_state["t_in"],
-                    "t_wall": st.session_state["t_wall"],
-                },
-            }
-            saved = save_recipe_revision(st.session_state["selected_recipe_name"], snapshot_payload, note="UI snapshot")
-            st.success(f"Revision saved: {saved.name}")
-
-        selected_recipe_name = st.selectbox("Recipe", options=recipe_names(), key="selected_recipe_name")
-        recipe = get_recipe(selected_recipe_name)
-        st.subheader("Model selection by recipe")
-        st.write(f"Model: `{recipe.model}`")
-        st.caption(recipe.note)
-        with st.expander("Best-known templates", expanded=False):
-            templates = _best_known_templates()
-            tpl_name = st.selectbox("Template", options=list(templates.keys()), key="bkr_template_name")
-            st.caption(f"Target RSD: {templates[tpl_name]['target_rsd']:.1f}%")
-            if st.button("Apply template", key="apply_template_btn"):
-                _apply_loaded_recipe(templates[tpl_name]["payload"])
-                st.success(f"Template applied: {tpl_name}")
-                st.rerun()
-        with st.expander("Recipe revision history", expanded=False):
-            revisions = list_recipe_revisions(recipe_name=selected_recipe_name)
-            if not revisions:
-                st.caption("No revisions yet.")
-            else:
-                selected_rev = st.selectbox("Revision", options=[r.revision_id for r in revisions], key="selected_revision_id")
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    if st.button("Load revision", key="load_revision_btn"):
-                        rev = load_recipe_revision(selected_rev)
-                        _apply_loaded_recipe(rev.payload)
-                        st.success(f"Loaded revision: {selected_rev}")
-                        st.rerun()
-                with col_b:
-                    if st.button("Diff with current", key="diff_revision_btn"):
-                        rev = load_recipe_revision(selected_rev)
-                        current_stub = {
-                            "model": recipe.model,
-                            "shared": {
-                                "duration_s": st.session_state["duration_s"],
-                                "dt_s": st.session_state["dt_s"],
-                                "cells": st.session_state["cells"],
-                                "tau_s": st.session_state["tau_s"],
-                                "kh": st.session_state["kh"],
-                                "t_in": st.session_state["t_in"],
-                                "t_wall": st.session_state["t_wall"],
-                            },
-                        }
-                        diff = diff_recipe_revisions(rev.payload, current_stub)
-                        st.json(diff)
-                with col_c:
-                    if st.button("Generate changelog", key="generate_changelog_btn"):
-                        changelog_path = generate_recipe_changelog(recipe_name=selected_recipe_name)
-                        st.success(f"Changelog generated: {changelog_path}")
-        st.subheader("Layout mode")
-        layout_mode = st.radio(
-            "Page layout",
-            options=["Desktop (2:3)", "Balanced (1:1)", "Focus charts"],
-            key="layout_mode",
+        sidebar_main_tab, sidebar_display_tab = st.tabs(
+            [_t("sidebar.tab.main", "Main"), _t("sidebar.tab.display", "Display settings")]
         )
-        _render_threshold_editor_sidebar()
+        with sidebar_main_tab:
+            st.subheader(_t("sidebar.language", "Language"))
+            st.selectbox(
+                _t("sidebar.language", "Language"),
+                options=["Русский", "English", "中文"],
+                key="ui_language",
+            )
+            st.subheader(_t("sidebar.recipe_storage", "Recipe storage"))
+            recipe_file_path = st.text_input(_t("sidebar.recipe_file", "Recipe file (.json/.yaml)"), key="recipe_file_path")
+            if st.button(_t("sidebar.load_recipe", "Load recipe from file")):
+                try:
+                    payload = load_recipe(recipe_file_path)
+                    _apply_loaded_recipe(payload)
+                    st.success("Recipe loaded")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Failed to load recipe: {exc}")
+            if st.button(_t("sidebar.save_revision_snapshot", "Save revision snapshot"), key="save_recipe_revision_btn"):
+                snapshot_payload = {
+                    "model": "wet-cascade" if st.session_state.get("selected_recipe_name") == "Wet mixing" else "dry-cascade",
+                    "shared": {
+                        "duration_s": st.session_state["duration_s"],
+                        "dt_s": st.session_state["dt_s"],
+                        "cells": st.session_state["cells"],
+                        "tau_s": st.session_state["tau_s"],
+                        "kh": st.session_state["kh"],
+                        "t_in": st.session_state["t_in"],
+                        "t_wall": st.session_state["t_wall"],
+                    },
+                }
+                saved = save_recipe_revision(st.session_state["selected_recipe_name"], snapshot_payload, note="UI snapshot")
+                st.success(f"Revision saved: {saved.name}")
 
-        st.subheader("Shared simulation parameters")
-        duration_s = st.slider("Duration, s", 10.0, 300.0, 120.0, 5.0, key="duration_s")
-        dt_s = st.slider("Time step, s", 0.1, 5.0, 1.0, 0.1, key="dt_s")
-        cells = st.slider("Number of cells", 1, 8, 3, 1, key="cells")
-        tau_s = st.slider("Mean residence time tau, s", 5.0, 300.0, 45.0, 1.0, key="tau_s")
-        kh = st.slider("Heat exchange kh, 1/s", 0.0, 0.3, 0.02, 0.005, key="kh")
-        t_in = st.slider("Inlet temperature, C", 10.0, 80.0, 25.0, 1.0, key="t_in")
-        t_wall = st.slider("Wall temperature, C", 10.0, 80.0, 30.0, 1.0, key="t_wall")
+            selected_recipe_name = st.selectbox(_t("sidebar.recipe", "Recipe"), options=recipe_names(), key="selected_recipe_name")
+            recipe = get_recipe(selected_recipe_name)
+            st.subheader(_t("sidebar.model_by_recipe", "Model selection by recipe"))
+            st.write(f"Model: `{recipe.model}`")
+            st.caption(recipe.note)
+            with st.expander(_t("sidebar.best_templates", "Best-known templates"), expanded=False):
+                templates = _best_known_templates()
+                tpl_name = st.selectbox(_t("sidebar.template", "Template"), options=list(templates.keys()), key="bkr_template_name")
+                st.caption(f"Target RSD: {templates[tpl_name]['target_rsd']:.1f}%")
+                if st.button(_t("sidebar.apply_template", "Apply template"), key="apply_template_btn"):
+                    _apply_loaded_recipe(templates[tpl_name]["payload"])
+                    st.success(f"Template applied: {tpl_name}")
+                    st.rerun()
+            with st.expander(_t("sidebar.recipe_history", "Recipe revision history"), expanded=False):
+                revisions = list_recipe_revisions(recipe_name=selected_recipe_name)
+                if not revisions:
+                    st.caption(_t("sidebar.no_revisions", "No revisions yet."))
+                else:
+                    selected_rev = st.selectbox(_t("sidebar.revision", "Revision"), options=[r.revision_id for r in revisions], key="selected_revision_id")
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        if st.button(_t("sidebar.load_revision", "Load revision"), key="load_revision_btn"):
+                            rev = load_recipe_revision(selected_rev)
+                            _apply_loaded_recipe(rev.payload)
+                            st.success(f"Loaded revision: {selected_rev}")
+                            st.rerun()
+                    with col_b:
+                        if st.button(_t("sidebar.diff_with_current", "Diff with current"), key="diff_revision_btn"):
+                            rev = load_recipe_revision(selected_rev)
+                            current_stub = {
+                                "model": recipe.model,
+                                "shared": {
+                                    "duration_s": st.session_state["duration_s"],
+                                    "dt_s": st.session_state["dt_s"],
+                                    "cells": st.session_state["cells"],
+                                    "tau_s": st.session_state["tau_s"],
+                                    "kh": st.session_state["kh"],
+                                    "t_in": st.session_state["t_in"],
+                                    "t_wall": st.session_state["t_wall"],
+                                },
+                            }
+                            diff = diff_recipe_revisions(rev.payload, current_stub)
+                            st.json(diff)
+                    with col_c:
+                        if st.button(_t("sidebar.generate_changelog", "Generate changelog"), key="generate_changelog_btn"):
+                            changelog_path = generate_recipe_changelog(recipe_name=selected_recipe_name)
+                            st.success(f"Changelog generated: {changelog_path}")
+
+            st.subheader(_t("sidebar.shared", "Shared simulation parameters"))
+            duration_s = st.slider("Duration, s", 10.0, 300.0, 120.0, 5.0, key="duration_s")
+            dt_s = st.slider("Time step, s", 0.1, 5.0, 1.0, 0.1, key="dt_s")
+            cells = st.slider("Number of cells", 1, 8, 3, 1, key="cells")
+            tau_s = st.slider("Mean residence time tau, s", 5.0, 300.0, 45.0, 1.0, key="tau_s")
+            kh = st.slider("Heat exchange kh, 1/s", 0.0, 0.3, 0.02, 0.005, key="kh")
+            t_in = st.slider("Inlet temperature, C", 10.0, 80.0, 25.0, 1.0, key="t_in")
+            t_wall = st.slider("Wall temperature, C", 10.0, 80.0, 30.0, 1.0, key="t_wall")
+            with st.expander(_t("mixer.title", "Mixer parameters"), expanded=False):
+                mixer_type = st.selectbox(
+                    _t("mixer.type", "Mixer type"),
+                    options=["plough"],
+                    format_func=lambda x: _t("mixer.type.plough", "Plough mixer"),
+                    key="mixer_type",
+                )
+                mixer_volume_m3 = st.number_input(_t("mixer.volume", "Working chamber volume, m3"), min_value=0.1, max_value=20.0, step=0.1, key="mixer_volume_m3")
+                mixer_fill_factor = st.slider(_t("mixer.fill", "Fill factor"), 0.1, 0.9, float(st.session_state["mixer_fill_factor"]), 0.01, key="mixer_fill_factor")
+                mixer_loaded_mass_kg = st.number_input(_t("mixer.mass", "Loaded mass, kg"), min_value=10.0, max_value=50000.0, step=10.0, key="mixer_loaded_mass_kg")
+                mixer_speed_rpm = st.number_input(_t("mixer.speed", "Shaft speed, rpm"), min_value=1.0, max_value=200.0, step=1.0, key="mixer_speed_rpm")
+                mixer_power_kw = st.number_input(_t("mixer.power", "Motor power, kW"), min_value=0.5, max_value=500.0, step=0.5, key="mixer_power_kw")
+                st.caption(f"Suggested loaded mass from V*phi*rho_bulk_ref: {mixer_volume_m3 * mixer_fill_factor * 1200.0:.1f} kg")
+            mixer_payload = {
+                "mixer_type": mixer_type,
+                "mixer_volume_m3": mixer_volume_m3,
+                "mixer_fill_factor": mixer_fill_factor,
+                "mixer_loaded_mass_kg": mixer_loaded_mass_kg,
+                "mixer_speed_rpm": mixer_speed_rpm,
+                "mixer_power_kw": mixer_power_kw,
+            }
+
+        with sidebar_display_tab:
+            st.subheader(_t("sidebar.layout", "Layout mode"))
+            if st.button(_t("display.reset", "Reset display to recommended"), key="reset_display_recommended_btn"):
+                st.session_state["layout_mode"] = "Desktop (2:3)"
+                st.session_state["single_column_mode"] = True
+                st.success(_t("display.reset.done", "Display settings reset to recommended."))
+                st.rerun()
+            layout_options = ["Desktop (2:3)", "Balanced (1:1)", "Focus charts"]
+            layout_labels = {
+                "Desktop (2:3)": _t("layout.desktop", "Desktop (2:3)"),
+                "Balanced (1:1)": _t("layout.balanced", "Balanced (1:1)"),
+                "Focus charts": _t("layout.focus", "Focus charts"),
+            }
+            st.radio(
+                _t("sidebar.page_layout", "Page layout"),
+                options=layout_options,
+                format_func=lambda x: layout_labels.get(x, x),
+                key="layout_mode",
+            )
+            st.checkbox(_t("layout.readable", "Readable mode (stacked panels)"), key="single_column_mode")
+            _render_threshold_editor_sidebar()
+
+    layout_mode = st.session_state["layout_mode"]
+    single_column_mode = st.session_state["single_column_mode"]
 
     layout_map = {
-        "Desktop (2:3)": ([2, 3], "Configuration panel (~40% width)"),
-        "Balanced (1:1)": ([1, 1], "Configuration panel (~50% width)"),
-        "Focus charts": ([1, 4], "Compact configuration panel (~20% width)"),
+        "Desktop (2:3)": ([2, 3], _t("layout.caption.desktop", "Configuration panel (~40% width)")),
+        "Balanced (1:1)": ([1, 1], _t("layout.caption.balanced", "Configuration panel (~50% width)")),
+        "Focus charts": ([2, 4], _t("layout.caption.focus", "Compact configuration panel (~20% width)")),
     }
-    layout_spec, caption = layout_map.get(layout_mode, ([2, 3], "Configuration panel (~40% width)"))
-    left_panel, right_panel = st.columns(layout_spec, gap="large")
-    with left_panel:
-        st.caption(caption)
+    if single_column_mode:
+        st.caption(_t("layout.readable", "Readable mode (stacked panels)"))
         auto_params, material_payload = _render_material_config(cells=cells)
-
-    with right_panel:
         if recipe.model == "dry-cascade":
             current_payload = _run_dry_view(
                 duration_s=duration_s,
@@ -1611,6 +2063,7 @@ def run_app() -> None:
                 t_wall=t_wall,
                 auto_params=auto_params,
                 material_payload=material_payload,
+                mixer_payload=mixer_payload,
             )
         else:
             current_payload = _run_wet_view(
@@ -1623,16 +2076,51 @@ def run_app() -> None:
                 t_wall=t_wall,
                 auto_params=auto_params,
                 material_payload=material_payload,
+                mixer_payload=mixer_payload,
             )
+    else:
+        layout_spec, caption = layout_map.get(layout_mode, ([2, 3], _t("layout.caption.desktop", "Configuration panel (~40% width)")))
+        left_panel, right_panel = st.columns(layout_spec, gap="large")
+        with left_panel:
+            st.caption(caption)
+            auto_params, material_payload = _render_material_config(cells=cells)
+
+        with right_panel:
+            if recipe.model == "dry-cascade":
+                current_payload = _run_dry_view(
+                    duration_s=duration_s,
+                    dt_s=dt_s,
+                    cells=cells,
+                    tau_s=tau_s,
+                    kh=kh,
+                    t_in=t_in,
+                    t_wall=t_wall,
+                    auto_params=auto_params,
+                    material_payload=material_payload,
+                    mixer_payload=mixer_payload,
+                )
+            else:
+                current_payload = _run_wet_view(
+                    duration_s=duration_s,
+                    dt_s=dt_s,
+                    cells=cells,
+                    tau_s=tau_s,
+                    kh=kh,
+                    t_in=t_in,
+                    t_wall=t_wall,
+                    auto_params=auto_params,
+                    material_payload=material_payload,
+                    mixer_payload=mixer_payload,
+                )
 
     with st.sidebar:
-        if st.button("Save current recipe to file"):
+        if st.button(_t("sidebar.save_recipe", "Save current recipe to file")):
             try:
                 save_recipe(st.session_state["recipe_file_path"], current_payload)
                 st.success("Recipe saved")
             except Exception as exc:
                 st.error(f"Failed to save recipe: {exc}")
-        if st.button("Save full recipe revision", key="save_full_revision_btn"):
+        if st.button(_t("sidebar.save_full_revision", "Save full recipe revision"), key="save_full_revision_btn"):
             path = save_recipe_revision(st.session_state["selected_recipe_name"], current_payload, note="full payload")
             st.success(f"Saved revision: {path.name}")
 

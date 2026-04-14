@@ -157,6 +157,9 @@ The repository now documents the mathematical apparatus from the provided techni
 See:
 - `docs/mathematical-apparatus.md`
 - `docs/error-check-report.md`
+- `docs/user-guide.md`
+- `docs/user-guide.ru.md`
+- `docs/user-guide.en.md`
 
 ## Module scope (next milestones)
 

@@ -35,7 +35,12 @@ def save_recipe_revision(
 ) -> Path:
     versions_dir = _versions_dir(base_dir)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
-    revision_id = f"{_slug(recipe_name)}-{stamp}"
+    base_id = f"{_slug(recipe_name)}-{stamp}"
+    revision_id = base_id
+    counter = 1
+    while (versions_dir / f"{revision_id}.json").exists():
+        counter += 1
+        revision_id = f"{base_id}-{counter}"
     body = {
         "revision_id": revision_id,
         "recipe_name": recipe_name,
